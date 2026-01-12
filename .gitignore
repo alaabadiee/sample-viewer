@@ -1,0 +1,66 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Packages and build
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Unit test / coverage reports
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Logs and runtime
+*.log
+*.pid
+*.seed
+
+# Flask/WSGI specifics
+instance/
+.flaskenv
+
+# Environment variables (keep secrets out of git)
+.env
+.env.*
+
+# Editors and IDEs
+.vscode/
+.idea/
+
+# Node / front-end (if used for static assets build)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS-specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Caches
+.cache/
+
+# Misc
+.sass-cache/
+.ropeproject/
+profile_default/
+ipython_config.py
