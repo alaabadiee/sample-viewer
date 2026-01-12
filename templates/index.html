@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample Viewer</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <a id="homeBtn" class="home-btn" href="/" aria-label="Home">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9.5L12 3l9 6.5"></path>
+                    <path d="M5 10v10a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-6h2v6a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V10"></path>
+                </svg>
+            </a>
+            <h1>Sample Viewer</h1>
+            <div class="controls">
+                <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme">
+                    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Search Section -->
+        <div class="search-section">
+            <div class="search-box">
+                <div class="custom-select" id="projectSelectWrapper">
+                    <button type="button" class="custom-select-toggle" id="projectSelectToggle" aria-haspopup="listbox" aria-expanded="false">Use Case…</button>
+                    <div class="custom-select-menu" id="projectSelectMenu" role="listbox" aria-label="Use Case">
+                        <ul id="projectSelectList"></ul>
+                    </div>
+                    <select id="projectSelect" class="visually-hidden-select" aria-label="Select project">
+                        <option value="" selected disabled>Use Case…</option>
+                        <option value="audit">Auditing</option>
+                        <option value="antenna">Invoice Ingestion</option>
+                        <option value="smartjudge">Smart Judge</option>
+                    </select>
+                </div>
+                <div class="custom-select" id="sampleSelectWrapper">
+                    <button type="button" class="custom-select-toggle" id="sampleSelectToggle" aria-haspopup="listbox" aria-expanded="false">Sample ID…</button>
+                    <div class="custom-select-menu" id="sampleSelectMenu" role="listbox" aria-label="Sample ID">
+                        <ul id="sampleSelectList"></ul>
+                    </div>
+                    <select id="sampleSelect" class="visually-hidden-select" aria-label="Select Purchase Requisition ID">
+                        <option value="" selected disabled>Sample ID…</option>
+                    </select>
+                </div>
+                <button id="searchBtn">Search</button>
+            </div>
+        </div>
+
+        <!-- Content Section -->
+        <div id="contentArea" class="content-area hidden">
+            <div class="split-view">
+                <!-- Left Side - PDF Viewer -->
+                <div class="pdf-section" style="display: flex; flex: 5;">
+                    <div class="section-header">
+                        <h2>Documents</h2>
+                        <span id="pdfCounter" class="counter"></span>
+                    </div>
+
+                    <div class="pdf-viewer">
+                        <div id="pdfContainer">
+                            <canvas id="pdfCanvas"></canvas>
+                        </div>
+
+                        <div class="pdf-controls">
+                            <div class="nav-controls">
+                                <button id="prevPdf" class="nav-btn" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="15 18 9 12 15 6"></polyline>
+                                    </svg>
+                                </button>
+                                <span id="pdfIndicator" class="indicator">No PDFs</span>
+                                <button id="nextPdf" class="nav-btn" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div class="page-controls">
+                                <button id="prevPage" class="nav-btn" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="15 18 9 12 15 6"></polyline>
+                                    </svg>
+                                </button>
+                                <span id="pageIndicator" class="indicator">Page 1 / 1</span>
+                                <button id="nextPage" class="nav-btn" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div class="zoom-controls">
+                                <div class="fit-toggle" style="display:flex;gap:0.5rem;align-items:center;">
+                                    <button id="fitWidth" class="zoom-btn" title="Fit to width">Fit width</button>
+                                    <button id="fitPage" class="zoom-btn" title="Fit to page">Fit page</button>
+                                </div>
+                                <button id="zoomOut" class="zoom-btn">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                        <line x1="8" y1="11" x2="14" y2="11"></line>
+                                    </svg>
+                                </button>
+                                <span id="zoomLevel">100%</span>
+                                <button id="zoomIn" class="zoom-btn">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                        <line x1="11" y1="8" x2="11" y2="14"></line>
+                                        <line x1="8" y1="11" x2="14" y2="11"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Side - Data/Metadata -->
+                <div class="data-section">
+                    <div class="section-header">
+                        <h2 id="rightPanelTitle">Sample Details</h2>
+                        <div class="header-actions">
+                            <span id="itemCounter" class="counter"></span>
+                            <a id="orchLink" class="orch-link" href="#" target="_blank" rel="noopener" aria-label="Open ActionAI">Open ActionAI</a>
+                        </div>
+                    </div>
+
+                    <!-- Items in Database (Auditing/Invoice Ingestion) -->
+                    <div class="collapsible-section" id="itemsSection">
+                        <div class="collapsible-header" role="button" tabindex="0">
+                            <span>Items in Database</span>
+                            <div class="header-actions">
+                                <span class="chevron">▼</span>
+                            </div>
+                        </div>
+                        <div class="collapsible-content">
+                            <div class="items-list">
+                                <ol id="shortTextList"></ol>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metadata section (Smart Judge only) -->
+                    <div class="collapsible-section" id="metadataSection" style="display:none;">
+                        <div class="collapsible-header" role="button" tabindex="0">
+                            <span>Metadata</span>
+                            <div class="header-actions">
+                                <button class="expand-btn" data-target="metadataJson" title="Expand full view" aria-label="Metadata">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+                                </button>
+                                <span class="chevron">▼</span>
+                            </div>
+                        </div>
+                        <div class="collapsible-content">
+                            <pre class="json-view" id="metadataJson"></pre>
+                        </div>
+                    </div>
+
+                                        <div class="collapsible-section" id="warningsSection">
+                        <div class="collapsible-header" role="button" tabindex="0">
+                                                <span>Final Output</span>
+                                                <div class="header-actions">
+                                                    <button class="expand-btn" data-target="warningsJson" title="Expand full view" aria-label="Expand Final Output">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+                                                    </button>
+                            <span class="chevron">▼</span>
+                                                </div>
+                                            </div>
+                        <div class="collapsible-content">
+                            <pre class="json-view" id="warningsJson"></pre>
+                        </div>
+
+                                                <!-- Modal for expanded content -->
+                                                <div id="fullViewModal" class="modal" aria-hidden="true" role="dialog" aria-label="Full view">
+                                                    <div class="modal-backdrop"></div>
+                                                    <div class="modal-content" role="document">
+                                                        <div class="modal-header">
+                                                            <span id="modalTitle">Full view</span>
+                                                            <button id="modalClose" class="modal-close" aria-label="Close">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                                            </button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <pre id="modalPre" class="json-view"></pre>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                        </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="1.5">
+                <path
+                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                </path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+            <p>Select a use case and sample ID to begin.</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="errorState" class="error-state hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <p id="errorMessage">Sample ID not found</p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+
+</html>
