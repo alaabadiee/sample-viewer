@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sample Viewer</title>
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon-dev.ico') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -58,6 +58,7 @@
                         <option value="audit">Auditing</option>
                         <option value="antenna">Invoice Ingestion</option>
                         <option value="smartjudge">Smart Judge</option>
+                        <option value="promptenhancer">Prompt Enhancer</option>
                     </select>
                 </div>
                 <div class="custom-select" id="sampleSelectWrapper">
@@ -69,7 +70,6 @@
                         <option value="" selected disabled>Sample ID…</option>
                     </select>
                 </div>
-                <button id="searchBtn">Search</button>
             </div>
         </div>
 
@@ -79,7 +79,7 @@
                 <!-- Left Side - PDF Viewer -->
                 <div class="pdf-section" style="display: flex; flex: 5;">
                     <div class="section-header">
-                        <h2>Documents</h2>
+                        <h2></h2>
                         <span id="pdfCounter" class="counter"></span>
                     </div>
 
@@ -96,7 +96,7 @@
                                         <polyline points="15 18 9 12 15 6"></polyline>
                                     </svg>
                                 </button>
-                                <span id="pdfIndicator" class="indicator">No PDFs</span>
+                                <span id="pdfIndicator" class="indicator">No documents</span>
                                 <button id="nextPdf" class="nav-btn" disabled>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2">
@@ -122,10 +122,6 @@
                             </div>
 
                             <div class="zoom-controls">
-                                <div class="fit-toggle" style="display:flex;gap:0.5rem;align-items:center;">
-                                    <button id="fitWidth" class="zoom-btn" title="Fit to width">Fit width</button>
-                                    <button id="fitPage" class="zoom-btn" title="Fit to page">Fit page</button>
-                                </div>
                                 <button id="zoomOut" class="zoom-btn">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2">

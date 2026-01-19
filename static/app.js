@@ -18,7 +18,9 @@ let currentData = null;
 let currentPdfIndex = 0;
 let currentScale = 1.0;
 let baseScale = 1.0;
-let fitMode = localStorage.getItem('fitMode') || 'page'; // 'page' or 'width'
+// Force fit mode to 'width' by default (override any previous 'page' setting)
+localStorage.setItem('fitMode', 'width');
+let fitMode = 'width';
 let pdfDoc = null;
 let pageRendering = false;
 let currentPageNumber = 1;
@@ -31,7 +33,7 @@ let dragScrollStartTop = 0;
 let activePointerId = null;
 
 // ==================== DOM ELEMENTS ====================
-const searchBtn = document.getElementById('searchBtn');
+// No search button: search will trigger automatically on selection
 const projectSelect = document.getElementById('projectSelect');
 const sampleSelect = document.getElementById('sampleSelect');
 const contentArea = document.getElementById('contentArea');
@@ -49,8 +51,8 @@ const nextPdfBtn = document.getElementById('nextPdf');
 const zoomInBtn = document.getElementById('zoomIn');
 const zoomOutBtn = document.getElementById('zoomOut');
 const zoomLevel = document.getElementById('zoomLevel');
-const fitWidthBtn = document.getElementById('fitWidth');
-const fitPageBtn = document.getElementById('fitPage');
+// const fitWidthBtn = document.getElementById('fitWidth'); // Removed
+// const fitPageBtn = document.getElementById('fitPage'); // Removed
 const prevPageBtn = document.getElementById('prevPage');
 const nextPageBtn = document.getElementById('nextPage');
 const pageIndicator = document.getElementById('pageIndicator');
@@ -185,8 +187,7 @@ if (typeof pdfjsLib !== 'undefined') {
 }
 
 // ==================== SEARCH FUNCTIONALITY ====================
-console.log('Initializing search button...');
-searchBtn.addEventListener('click', handleSearch);
+// Removed manual search button; search is triggered on sample selection
 
 // Populate Sample IDs on load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -301,7 +302,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 updateSampleToggleFromSelection();
             });
         }
-        // Load available projects and initialize selection
+    // Load available projects and initialize selection
         try {
             const projResp = await fetch('/api/projects');
             if (projResp.ok) {
@@ -328,10 +329,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.warn('Failed to load projects list', e);
         }
 
-        // Do not auto-select a project; require user choice
-        const projectKey = projectSelect ? (projectSelect.value || '') : '';
-        // Disable search until a valid selection and sample
-        searchBtn.disabled = true;
+    // Do not auto-select a project; require user choice
+    const projectKey = projectSelect ? (projectSelect.value || '') : '';
         if (orchLink) {
             orchLink.classList.add('disabled');
             orchLink.href = '#';
@@ -347,12 +346,64 @@ document.addEventListener('DOMContentLoaded', async () => {
             sPlaceholder.selected = true;
             sampleSelect.appendChild(sPlaceholder);
         } else {
+            // Prompt Enhancer mode: hide controls and load documents list
+            if (projectKey === 'promptenhancer') {
+                // Hide right panel sections
+                const itemsSection = document.getElementById('itemsSection');
+                const metadataSection = document.getElementById('metadataSection');
+                const warningsSection = document.getElementById('warningsSection');
+                const orchLink = document.getElementById('orchLink');
+                const dataSection = document.querySelector('.data-section');
+                // Hide counters
+                if (pdfCounter) { pdfCounter.textContent = ''; pdfCounter.style.display = 'none'; }
+                if (pdfIndicator) { pdfIndicator.textContent = ''; pdfIndicator.style.display = 'none'; }
+                if (itemsSection) itemsSection.style.display = 'none';
+                if (metadataSection) metadataSection.style.display = 'none';
+                if (warningsSection) warningsSection.style.display = 'none';
+                if (dataSection) dataSection.style.display = 'none';
+                // Disable orchestration link
+                if (orchLink) {
+                    orchLink.classList.add('disabled');
+                    orchLink.href = '#';
+                    orchLink.title = '';
+                }
+                // Hide sample selector entirely
+                if (sampleSelectWrapper) sampleSelectWrapper.style.display = 'none';
+                // Load documents list and render images
+                try {
+                    const docResp = await fetch(`/api/documents?project=${encodeURIComponent(projectKey)}`);
+                    const docData = await docResp.json();
+                    if (docResp.ok && Array.isArray(docData.documents)) {
+                        currentData = { sample_id: '', short_texts: [], pdfs: docData.documents };
+                        currentPdfIndex = 0;
+                        // Show content area
+                        emptyState.style.display = 'none';
+                        errorState.classList.add('hidden');
+                        contentArea.classList.remove('hidden');
+                        // Render first image
+                        loadImage(currentPdfIndex);
+                        updatePdfControls();
+                    } else {
+                        showError(docData.error || 'No documents found');
+                    }
+                } catch (e) {
+                    showError('Failed to load documents');
+                }
+                // Stop normal flow for sample IDs
+                return;
+            }
             // Enable orchestration link for selected project
             if (orchLink) {
                 orchLink.classList.remove('disabled');
                 orchLink.href = `/orchestration/${encodeURIComponent(projectKey)}`;
                 orchLink.title = `Open orchestration for ${projectKey}`;
             }
+            // Ensure right panel visible for non-Prompt Enhancer
+            const dataSection = document.querySelector('.data-section');
+            if (dataSection) dataSection.style.display = '';
+            // Restore counters for non-Prompt Enhancer
+            if (pdfCounter) { pdfCounter.style.display = ''; }
+            if (pdfIndicator) { pdfIndicator.style.display = ''; }
 
             const resp = await fetch(`/api/sample_ids?project=${encodeURIComponent(projectKey)}`);
             const data = await resp.json();
@@ -488,6 +539,48 @@ if (projectSelect) {
         sampleSelect.appendChild(opt);
 
         try {
+            // Prompt Enhancer: special flow (no sample IDs)
+            if (projectKey === 'promptenhancer') {
+                // Hide sample selector and right panel sections
+                if (sampleSelectWrapper) sampleSelectWrapper.style.display = 'none';
+                const itemsSection = document.getElementById('itemsSection');
+                const metadataSection = document.getElementById('metadataSection');
+                const warningsSection = document.getElementById('warningsSection');
+                const dataSection = document.querySelector('.data-section');
+                // Hide counters
+                if (pdfCounter) { pdfCounter.textContent = ''; pdfCounter.style.display = 'none'; }
+                if (pdfIndicator) { pdfIndicator.textContent = ''; pdfIndicator.style.display = 'none'; }
+                if (itemsSection) itemsSection.style.display = 'none';
+                if (metadataSection) metadataSection.style.display = 'none';
+                if (warningsSection) warningsSection.style.display = 'none';
+                if (dataSection) dataSection.style.display = 'none';
+                // Disable orchestration link
+                if (orchLink) {
+                    orchLink.classList.add('disabled');
+                    orchLink.href = '#';
+                    orchLink.title = '';
+                }
+                // Load documents
+                try {
+                    const docResp = await fetch(`/api/documents?project=${encodeURIComponent(projectKey)}`);
+                    const docData = await docResp.json();
+                    if (docResp.ok && Array.isArray(docData.documents)) {
+                        currentData = { sample_id: '', short_texts: [], pdfs: docData.documents };
+                        currentPdfIndex = 0;
+                        emptyState.style.display = 'none';
+                        errorState.classList.add('hidden');
+                        contentArea.classList.remove('hidden');
+                        loadImage(currentPdfIndex);
+                        updatePdfControls();
+                    } else {
+                        showError(docData.error || 'No documents found');
+                    }
+                } catch (e) {
+                    showError('Failed to load documents');
+                }
+                return;
+            }
+
             const resp = await fetch(`/api/sample_ids?project=${encodeURIComponent(projectKey)}`);
             const data = await resp.json();
         if (resp.ok && Array.isArray(data.ids)) {
@@ -513,8 +606,7 @@ if (projectSelect) {
         } catch (e) {
             showError('Failed to load Sample IDs');
         }
-        // Enable search only when a sample is selected
-        searchBtn.disabled = true;
+    // No manual search button; nothing to enable/disable
     // Do not change Sample Details panel on project change; wait for sample selection
     });
 }
@@ -553,12 +645,20 @@ async function handleSearch() {
 
     // Toggle right panel sections based on the active project AFTER data is loaded
     const isSmartActive = projectKey === 'smartjudge';
+    const isPrompt = projectKey === 'promptenhancer';
     if (rightPanelTitle) rightPanelTitle.textContent = 'Sample Details';
-    if (itemsSection) itemsSection.style.display = isSmartActive ? 'none' : '';
+    if (itemsSection) itemsSection.style.display = (isSmartActive || isPrompt) ? 'none' : '';
     if (metadataSection) metadataSection.style.display = isSmartActive ? '' : 'none';
+    const warningsSection = document.getElementById('warningsSection');
+    // Hide final output section for both Smart Judge and Prompt Enhancer
+    if (warningsSection) warningsSection.style.display = (isPrompt || isSmartActive) ? 'none' : '';
 
-        // Load LLM outputs for this Sample ID and populate sections
+        // Load LLM outputs for this Sample ID and populate sections (skip for Prompt Enhancer)
         try {
+            if (isPrompt) {
+                const warningsPre = document.getElementById('warningsJson');
+                if (warningsPre) warningsPre.textContent = '';
+            } else {
             const llmResp = await fetch(`/api/llm/${encodeURIComponent(currentData.sample_id)}?project=${encodeURIComponent(projectKey)}`);
             const llmData = await llmResp.json();
             const warningsPre = document.getElementById('warningsJson');
@@ -596,6 +696,7 @@ async function handleSearch() {
                     metadataJson.textContent = 'No metadata available for this Sample ID.';
                 }
             }
+            }
         } catch (e) {
             console.error('Failed to load LLM outputs:', e);
             if (projectKey === 'smartjudge' && metadataJson) {
@@ -617,8 +718,11 @@ if (sampleSelect) {
     sampleSelect.addEventListener('change', () => {
         const hasProject = !!(projectSelect && projectSelect.value);
         const hasSample = !!(sampleSelect && sampleSelect.value);
-        searchBtn.disabled = !(hasProject && hasSample);
         updateSampleToggleFromSelection();
+        if (hasProject && hasSample) {
+            // Auto-trigger search when a valid sample is chosen
+            handleSearch();
+        }
     });
 }
 
@@ -636,7 +740,7 @@ function displayData() {
 
     // Display short texts
     const projectKey = projectSelect ? (projectSelect.value || '') : '';
-    if (projectKey !== 'smartjudge') {
+    if (projectKey !== 'smartjudge' && projectKey !== 'promptenhancer') {
         displayShortTexts();
     } else {
         // Clear items list and counter for Smart Judge
@@ -645,10 +749,21 @@ function displayData() {
             if (itemCounter) itemCounter.style.display = 'none';
     }
 
-    // Display PDFs
+    // Display documents (PDFs or images)
     if (currentData.pdfs.length > 0) {
-        loadPdf(currentPdfIndex);
-        updatePdfControls();
+        const isPrompt = projectKey === 'promptenhancer';
+        if (isPrompt) {
+            // Hide counters for Prompt Enhancer
+            if (pdfCounter) pdfCounter.style.display = 'none';
+            if (pdfIndicator) pdfIndicator.style.display = 'none';
+            loadImage(currentPdfIndex);
+            updatePdfControls();
+        } else {
+            if (pdfCounter) pdfCounter.style.display = '';
+            if (pdfIndicator) pdfIndicator.style.display = '';
+            loadPdf(currentPdfIndex);
+            updatePdfControls();
+        }
     } else {
         showNoPdfs();
     }
@@ -685,8 +800,16 @@ function showNoPdfs() {
     ensurePdfCanvas();
     const ctx = pdfCanvas.getContext('2d');
     ctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
-    pdfIndicator.textContent = 'No PDFs available';
-    pdfCounter.textContent = '0 PDFs';
+    const isPrompt = (projectSelect ? projectSelect.value : '') === 'promptenhancer';
+    if (!isPrompt) {
+        pdfIndicator.textContent = 'No documents available';
+        pdfCounter.textContent = '0 documents';
+    } else {
+        if (pdfIndicator) pdfIndicator.textContent = '';
+        if (pdfCounter) pdfCounter.textContent = '';
+        if (pdfIndicator) pdfIndicator.style.display = 'none';
+        if (pdfCounter) pdfCounter.style.display = 'none';
+    }
     prevPdfBtn.disabled = true;
     nextPdfBtn.disabled = true;
     totalPages = 0;
@@ -695,19 +818,7 @@ function showNoPdfs() {
 }
 
 function setSearchLoading(isLoading) {
-    if (isLoading) {
-        searchBtn.disabled = true;
-        if (!searchBtn.dataset.originalText) {
-            searchBtn.dataset.originalText = searchBtn.textContent.trim();
-        }
-        searchBtn.textContent = '';
-        searchBtn.classList.add('loading');
-    } else {
-        searchBtn.disabled = false;
-        const defaultText = searchBtn.dataset.originalText || 'Search';
-        searchBtn.textContent = defaultText;
-        searchBtn.classList.remove('loading');
-    }
+    // No visible loading spinner now; could hook into UI if needed
 }
 
 // ==================== PDF RENDERING ====================
@@ -715,11 +826,17 @@ async function loadPdf(index) {
     if (!currentData || !currentData.pdfs[index]) return;
     const projectKey = projectSelect ? (projectSelect.value || 'audit') : 'audit';
     const isAntenna = projectKey === 'antenna';
+    const isPrompt = projectKey === 'promptenhancer';
     const fileName = currentData.pdfs[index];
     const pdfUrl = isAntenna
         ? `/api/pdf/${encodeURIComponent(fileName)}/${encodeURIComponent(fileName)}?project=${encodeURIComponent(projectKey)}`
         : `/api/pdf/${encodeURIComponent(currentData.sample_id)}/${encodeURIComponent(fileName)}?project=${encodeURIComponent(projectKey)}`;
     ensurePdfCanvas();
+
+    if (isPrompt) {
+        // Render image instead of PDF
+        return loadImage(index);
+    }
 
     // Check if PDF.js is available
     if (typeof pdfjsLib === 'undefined') {
@@ -824,8 +941,11 @@ function updatePdfControls() {
     if (!currentData) return;
 
     const totalPdfs = currentData.pdfs.length;
-    pdfCounter.textContent = `${totalPdfs} PDF${totalPdfs !== 1 ? 's' : ''}`;
-    pdfIndicator.textContent = `${currentPdfIndex + 1} / ${totalPdfs}`;
+    const isPrompt = (projectSelect ? projectSelect.value : '') === 'promptenhancer';
+    if (!isPrompt) {
+        pdfCounter.textContent = `${totalPdfs} PDF${totalPdfs !== 1 ? 's' : ''}`;
+        pdfIndicator.textContent = `${currentPdfIndex + 1} / ${totalPdfs}`;
+    }
 
     prevPdfBtn.disabled = currentPdfIndex === 0;
     nextPdfBtn.disabled = currentPdfIndex === totalPdfs - 1;
@@ -839,25 +959,35 @@ function updatePdfControls() {
 function updateZoomDisplay() {
     const zoomPercent = Math.round((currentScale / baseScale) * 100);
     zoomLevel.textContent = `${zoomPercent}%`;
-    // Update toggle active states
-    if (fitWidthBtn && fitPageBtn) {
-        fitWidthBtn.classList.toggle('active', fitMode === 'width');
-        fitPageBtn.classList.toggle('active', fitMode === 'page');
-    }
+    // Removed fitWidth and fitPage button active state updates
 }
 
 // ==================== PDF NAVIGATION ====================
 prevPdfBtn.addEventListener('click', () => {
     if (currentPdfIndex > 0) {
         currentPdfIndex--;
-        loadPdf(currentPdfIndex);
+        const projectKey = projectSelect ? (projectSelect.value || '') : '';
+        const isPrompt = projectKey === 'promptenhancer';
+        if (isPrompt) {
+            loadImage(currentPdfIndex);
+        } else {
+            loadPdf(currentPdfIndex);
+        }
+        updatePdfControls();
     }
 });
 
 nextPdfBtn.addEventListener('click', () => {
     if (currentPdfIndex < currentData.pdfs.length - 1) {
         currentPdfIndex++;
-        loadPdf(currentPdfIndex);
+        const projectKey = projectSelect ? (projectSelect.value || '') : '';
+        const isPrompt = projectKey === 'promptenhancer';
+        if (isPrompt) {
+            loadImage(currentPdfIndex);
+        } else {
+            loadPdf(currentPdfIndex);
+        }
+        updatePdfControls();
     }
 });
 
@@ -871,65 +1001,53 @@ nextPageBtn.addEventListener('click', () => {
 
 // ==================== ZOOM CONTROLS ====================
 zoomInBtn.addEventListener('click', () => {
-    const maxScale = baseScale * 3;
-    if (currentScale < maxScale) {
-        currentScale += baseScale * 0.25;
-    renderAllPages();
-        updateZoomDisplay();
+    const projectKey = projectSelect ? (projectSelect.value || '') : '';
+    const isPrompt = projectKey === 'promptenhancer';
+    
+    if (isPrompt) {
+        // For images, use simple scale increments
+        const maxScale = 3.0;
+        if (currentScale < maxScale) {
+            currentScale += 0.25;
+            applyImageZoom();
+            updateZoomDisplay();
+        }
+    } else {
+        // For PDFs, use baseScale
+        const maxScale = baseScale * 3;
+        if (currentScale < maxScale) {
+            currentScale += baseScale * 0.25;
+            renderAllPages();
+            updateZoomDisplay();
+        }
     }
 });
 
 zoomOutBtn.addEventListener('click', () => {
-    const minScale = baseScale * 0.5;
-    if (currentScale > minScale) {
-        currentScale -= baseScale * 0.25;
-    renderAllPages();
-        updateZoomDisplay();
+    const projectKey = projectSelect ? (projectSelect.value || '') : '';
+    const isPrompt = projectKey === 'promptenhancer';
+    
+    if (isPrompt) {
+        // For images, use simple scale increments
+        const minScale = 0.5;
+        if (currentScale > minScale) {
+            currentScale -= 0.25;
+            applyImageZoom();
+            updateZoomDisplay();
+        }
+    } else {
+        // For PDFs, use baseScale
+        const minScale = baseScale * 0.5;
+        if (currentScale > minScale) {
+            currentScale -= baseScale * 0.25;
+            renderAllPages();
+            updateZoomDisplay();
+        }
     }
 });
 
 // ==================== FIT MODE TOGGLES ====================
-if (fitWidthBtn) {
-    fitWidthBtn.addEventListener('click', () => {
-        fitMode = 'width';
-        localStorage.setItem('fitMode', fitMode);
-        // Recalculate baseScale for current PDF
-        if (pdfDoc) {
-            // Recompute scale using first page for dimensions
-            pdfDoc.getPage(currentPageNumber).then((page) => {
-                const containerStyles = window.getComputedStyle(pdfContainer);
-                const horizontalPadding = parseFloat(containerStyles.paddingLeft) + parseFloat(containerStyles.paddingRight);
-                const containerWidth = Math.max(pdfContainer.clientWidth - horizontalPadding, 200);
-                const viewport = page.getViewport({ scale: 1 });
-                baseScale = containerWidth / viewport.width;
-                currentScale = baseScale;
-                renderAllPages();
-                updateZoomDisplay();
-            });
-        }
-    });
-}
-
-if (fitPageBtn) {
-    fitPageBtn.addEventListener('click', () => {
-        fitMode = 'page';
-        localStorage.setItem('fitMode', fitMode);
-        if (pdfDoc) {
-            pdfDoc.getPage(currentPageNumber).then((page) => {
-                const containerStyles = window.getComputedStyle(pdfContainer);
-                const horizontalPadding = parseFloat(containerStyles.paddingLeft) + parseFloat(containerStyles.paddingRight);
-                const verticalPadding = parseFloat(containerStyles.paddingTop) + parseFloat(containerStyles.paddingBottom);
-                const containerWidth = Math.max(pdfContainer.clientWidth - horizontalPadding, 200);
-                const containerHeight = Math.max(pdfContainer.clientHeight - verticalPadding, 200);
-                const viewport = page.getViewport({ scale: 1 });
-                baseScale = Math.min(containerWidth / viewport.width, containerHeight / viewport.height);
-                currentScale = baseScale;
-                renderAllPages();
-                updateZoomDisplay();
-            });
-        }
-    });
-}
+// Removed fitWidth and fitPage buttons
 
 // ==================== DOWNLOAD ====================
 // ==================== KEYBOARD SHORTCUTS ====================
@@ -989,6 +1107,44 @@ function updatePageControls() {
     pageIndicator.textContent = hasDoc ? `Pages ${totalPages}` : 'Pages 0';
     prevPageBtn.disabled = true;
     nextPageBtn.disabled = true;
+}
+
+// ================ IMAGE RENDERING (Prompt Enhancer) ================
+function loadImage(index) {
+    if (!currentData || !currentData.pdfs[index]) return;
+    const projectKey = projectSelect ? (projectSelect.value || 'promptenhancer') : 'promptenhancer';
+    const fileName = currentData.pdfs[index];
+    const imgUrl = `/api/pdf/${encodeURIComponent(fileName)}/${encodeURIComponent(fileName)}?project=${encodeURIComponent(projectKey)}`;
+    // Replace container with an image element
+    pdfContainer.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = imgUrl;
+    img.alt = fileName;
+    img.id = 'zoomableImage';
+    img.style.maxWidth = '100%';
+    img.style.height = 'auto';
+    img.style.display = 'block';
+    img.style.margin = '0 auto';
+    img.style.transformOrigin = 'center center';
+    img.style.transition = 'transform 0.2s ease';
+    pdfContainer.appendChild(img);
+    // Reset scale for new image
+    currentScale = 1.0;
+    applyImageZoom();
+    updateZoomDisplay();
+    // Reset PDF-specific state
+    pdfDoc = null;
+    totalPages = 1;
+    currentPageNumber = 1;
+    updatePageControls();
+}
+
+// Apply zoom transform to image
+function applyImageZoom() {
+    const img = document.getElementById('zoomableImage');
+    if (img) {
+        img.style.transform = `scale(${currentScale})`;
+    }
 }
 
 function handlePdfPointerDown(e) {

@@ -33,6 +33,11 @@ SMART_JUDGE_DATA_DIR = SMART_JUDGE_DIR / "data"
 SMART_JUDGE_LLM_OUTPUTS = SMART_JUDGE_DIR / "LLM_outputs.json"
 SMART_JUDGE_ORCHESTRATION_URL = os.getenv("SMART_JUDGE_ORCHESTRATION_URL")
 
+# Default configuration (Prompt Enhancer project)
+PROMPT_ENHANCER_DIR = USE_CASES_DIR / "Prompt Enhancer"
+PROMPT_ENHANCER_DATA_DIR = PROMPT_ENHANCER_DIR / "data"
+PROMPT_ENHANCER_ORCHESTRATION_URL = os.getenv("PROMPT_ENHANCER_ORCHESTRATION_URL")
+
 # Project registry
 PROJECTS = {
     "audit": {
@@ -55,6 +60,13 @@ PROJECTS = {
         "excel_file": None,
         "llm_outputs": SMART_JUDGE_LLM_OUTPUTS,
         "orchestration_url": SMART_JUDGE_ORCHESTRATION_URL,
+    },
+    "promptenhancer": {
+        "label": "Prompt Enhancer",
+        "data_dir": PROMPT_ENHANCER_DATA_DIR,
+        "excel_file": None,
+        "llm_outputs": None,
+        "orchestration_url": PROMPT_ENHANCER_ORCHESTRATION_URL,
     },
 }
 
@@ -91,6 +103,10 @@ def _get_project_config(project_key: str):
             missing.append("llm_outputs")
         if not data_dir or not data_dir.exists():
             missing.append("data_dir")
+    elif project_key == "promptenhancer":
+        # Only data_dir required; images (PNGs) only
+        if not data_dir or not data_dir.exists():
+            missing.append("data_dir")
     else:
         # Default strict
         if not data_dir or not data_dir.exists():
@@ -110,7 +126,7 @@ def index():
 
 @app.route("/api/sample/<sample_id>")
 def get_sample_data(sample_id):
-    """Get PDFs and purchase requisition data for a sample ID"""
+    """Get documents and data for a sample ID"""
     try:
         project_key = _get_project_key()
         print(f"[DEBUG] [/api/sample] project={project_key} sample_id={sample_id}")
@@ -118,17 +134,40 @@ def get_sample_data(sample_id):
         if not cfg:
             return jsonify({"error": err}), 400
 
-        # For Invoice Ingestion (antenna) and Smart Judge, validation is relaxed per project rules
-        if project_key not in ("antenna", "smartjudge") and not valid:
+        # For Antenna, Smart Judge, and Prompt Enhancer, validation is relaxed per project rules
+        if project_key not in ("antenna", "smartjudge", "promptenhancer") and not valid:
             return jsonify({"error": err}), 400
 
         data_dir: Path = cfg.get("data_dir") if cfg else None
+
         if project_key == "antenna":
             # Each PDF in data folder is a sample; sample_id is the filename
             pdf_path = data_dir / str(sample_id)
             if not pdf_path.exists() or not pdf_path.is_file():
                 return jsonify({"error": "Sample (PDF) not found"}), 404
-            short_texts = []
+
+            # Load items from Excel: match 'Sample ID' to sample_id and return 'Material Description'
+            short_texts: list[str] = []
+            excel_file: Path | None = cfg.get("excel_file")
+            if excel_file and excel_file.exists():
+                try:
+                    df = pd.read_excel(excel_file)
+                    # Normalize columns; support slight variations
+                    cols = {c.strip().lower(): c for c in df.columns if isinstance(c, str)}
+                    sample_col = cols.get("sample id")
+                    material_col = cols.get("material description")
+                    if sample_col and material_col:
+                        sample_norm = str(sample_id).strip()
+                        matches = df[df[sample_col].astype(str).str.strip() == sample_norm]
+                        short_texts = matches[material_col].dropna().astype(str).tolist()
+                        print(f"[DEBUG] Antenna Excel match: {len(short_texts)} 'Material Description' items for Sample ID={sample_id}")
+                    else:
+                        print("[DEBUG] Antenna Excel missing required columns 'Sample ID' and/or 'Material Description'")
+                except Exception as xe:
+                    print(f"[DEBUG] Failed to read Antenna Excel for items: {xe}")
+            else:
+                print("[DEBUG] Antenna Excel file not configured or missing; returning empty items list")
+
             pdfs = [str(sample_id)]
             result = {
                 "sample_id": sample_id,
@@ -141,7 +180,24 @@ def get_sample_data(sample_id):
             print(f"[DEBUG] Returning antenna result: {result['pdf_count']} PDFs, {result['text_count']} items")
             return jsonify(result)
 
-        if project_key == "smartjudge":
+        elif project_key == "promptenhancer":
+            # Prompt Enhancer: sample IDs are image files; only PNGs, no items or final outputs
+            img_path = data_dir / str(sample_id)
+            if not img_path.exists() or not img_path.is_file():
+                return jsonify({"error": "Sample (PNG) not found"}), 404
+            pngs = [str(sample_id)]
+            result = {
+                "sample_id": sample_id,
+                "short_texts": [],
+                "pdfs": pngs,  # reuse field for viewer; front-end will render images
+                "pdf_count": len(pngs),
+                "text_count": 0,
+                "project": project_key,
+            }
+            print(f"[DEBUG] Returning promptenhancer result: {result['pdf_count']} PNGs, no items")
+            return jsonify(result)
+
+        elif project_key == "smartjudge":
             # Smart Judge: sample IDs come from LLM outputs; PDFs live under data/<sample_id>/
             short_texts: list[str] = []
             pdf_folder = data_dir / str(sample_id)
@@ -150,7 +206,6 @@ def get_sample_data(sample_id):
                 files = [f.name for f in pdf_folder.glob("*.pdf")] + [f.name for f in pdf_folder.glob("*.PDF")]
                 # Deduplicate case-insensitively and sort by lowercase for stable order
                 seen = set()
-                pdfs = []
                 for name in sorted(files, key=lambda s: s.lower()):
                     low = name.lower()
                     if low in seen:
@@ -171,36 +226,26 @@ def get_sample_data(sample_id):
             print(f"[DEBUG] Returning smartjudge result: {result['pdf_count']} PDFs, {result['text_count']} items")
             return jsonify(result)
 
+        # Default (Audit)
         excel_path = cfg["excel_file"]
-
-        # Read Excel file
         print(f"[DEBUG] Reading Excel file: {excel_path}")
         df = pd.read_excel(excel_path)
         print(f"[DEBUG] Excel loaded. Shape: {df.shape}")
-
-        # Filter rows for this sample ID
         print(f"[DEBUG] Filtering for sample ID: {sample_id}")
         sample_data = df[df["Purch.Req."].astype(str) == str(sample_id)]
         print(f"[DEBUG] Found {len(sample_data)} matching rows")
-
         if sample_data.empty:
             print(f"[DEBUG] No data found for sample ID: {sample_id}")
             return jsonify({"error": "Sample ID not found"}), 404
-
-        # Get short texts
         short_texts = sample_data["Short Text"].tolist()
         print(f"[DEBUG] Short texts count: {len(short_texts)}")
-
-        # Get PDFs from folder
         pdf_folder = data_dir / str(sample_id)
         pdfs = []
-
         if pdf_folder.exists() and pdf_folder.is_dir():
             pdfs = sorted([f.name for f in pdf_folder.glob("*.PDF")])
             print(f"[DEBUG] Found {len(pdfs)} PDFs")
         else:
             print(f"[DEBUG] PDF folder not found: {pdf_folder}")
-
         result = {
             "sample_id": sample_id,
             "short_texts": short_texts,
@@ -209,36 +254,32 @@ def get_sample_data(sample_id):
             "text_count": len(short_texts),
             "project": project_key,
         }
-        print(
-            f"[DEBUG] Returning result: {result['pdf_count']} PDFs, {result['text_count']} items"
-        )
+        print(f"[DEBUG] Returning result: {result['pdf_count']} PDFs, {result['text_count']} items")
         return jsonify(result)
 
     except Exception as e:
         print(f"[ERROR] Exception in get_sample_data: {e}")
         import traceback
-
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/sample_ids")
 def get_sample_ids():
-    """Return distinct Purchase Requisition IDs from the Excel"""
+    """Return list of sample IDs depending on project."""
     try:
         project_key = _get_project_key()
         print(f"[DEBUG] [/api/sample_ids] project={project_key}")
         cfg, valid, err = _get_project_config(project_key)
         if not cfg:
             return jsonify({"error": err}), 400
-        # For Invoice Ingestion (antenna), sample IDs are filenames in data folder; Excel not required
+
+        # Antenna: use filenames in data_dir
         if project_key == "antenna":
             data_dir: Path = cfg["data_dir"]
             if not data_dir or not data_dir.exists():
                 return jsonify({"error": err or "Data directory not found"}), 400
-            # Collect PDF filenames (case-insensitive)
             files = [p.name for p in data_dir.glob("*.pdf")] + [p.name for p in data_dir.glob("*.PDF")]
-            # Unique and sorted case-insensitively
             seen = set()
             ids_sorted = []
             for name in sorted(files, key=lambda s: s.lower()):
@@ -249,7 +290,7 @@ def get_sample_ids():
                 ids_sorted.append(name)
             return jsonify({"ids": ids_sorted, "count": len(ids_sorted), "project": project_key})
 
-        # For Smart Judge, sample IDs come from LLM_outputs.json
+        # Smart Judge: from LLM_outputs.json
         if project_key == "smartjudge":
             llm_path: Path | None = cfg.get("llm_outputs")
             if not llm_path or not llm_path.exists():
@@ -268,19 +309,31 @@ def get_sample_ids():
                     sid_str = str(sid).strip()
                     if sid_str:
                         ids.append(sid_str)
-            # Unique and stable sort (by length then lex to group similar)
             ids_sorted = sorted(set(ids), key=lambda s: (len(s), s))
             return jsonify({"ids": ids_sorted, "count": len(ids_sorted), "project": project_key})
 
+        # Prompt Enhancer: PNG filenames in data_dir
+        if project_key == "promptenhancer":
+            data_dir: Path = cfg.get("data_dir")
+            if not data_dir or not data_dir.exists():
+                return jsonify({"error": err or "Data directory not found"}), 400
+            files = [p.name for p in data_dir.glob("*.png")] + [p.name for p in data_dir.glob("*.PNG")]
+            seen = set()
+            ids_sorted = []
+            for name in sorted(files, key=lambda s: s.lower()):
+                low = name.lower()
+                if low in seen:
+                    continue
+                seen.add(low)
+                ids_sorted.append(name)
+            return jsonify({"ids": ids_sorted, "count": len(ids_sorted), "project": project_key})
+
+        # Default (Audit): from Excel
         if not valid:
             return jsonify({"error": err}), 400
-
         excel_path = cfg["excel_file"]
         df = pd.read_excel(excel_path, usecols=["Purch.Req."])
-        ids = (
-            df["Purch.Req."].dropna().astype(str).str.strip().unique().tolist()
-        )
-        # Sort for stable display
+        ids = df["Purch.Req."].dropna().astype(str).str.strip().unique().tolist()
         try:
             ids_sorted = sorted(ids, key=lambda x: int(x))
         except Exception:
@@ -291,7 +344,7 @@ def get_sample_ids():
 
 @app.route("/api/pdf/<sample_id>/<filename>")
 def get_pdf(sample_id, filename):
-    """Serve PDF file"""
+    """Serve document file (PDF or image)."""
     try:
         project_key = _get_project_key()
         cfg, valid, err = _get_project_config(project_key)
@@ -300,52 +353,103 @@ def get_pdf(sample_id, filename):
         if not cfg.get("data_dir"):
             return jsonify({"error": err or "Data directory not found"}), 400
         data_dir: Path = cfg["data_dir"]
+
         if project_key == "antenna":
             # Files are flat under data_dir; prefer filename
-            pdf_path = data_dir / filename
-            if not pdf_path.exists():
-                # Fallback to sample_id as filename in case URL used only one segment
-                pdf_path = data_dir / str(sample_id)
+            doc_path = data_dir / filename
+            if not doc_path.exists():
+                doc_path = data_dir / str(sample_id)
+        elif project_key == "promptenhancer":
+            # Flat files; serve PNG or image
+            doc_path = data_dir / filename
         else:
-            pdf_path = data_dir / str(sample_id) / filename
-        if pdf_path.exists():
-            return send_file(pdf_path, mimetype="application/pdf")
-        else:
-            return jsonify({"error": "PDF not found"}), 404
+            doc_path = data_dir / str(sample_id) / filename
+
+        if not doc_path.exists():
+            return jsonify({"error": "Document not found"}), 404
+
+        ext = doc_path.suffix.lower()
+        if ext == ".pdf":
+            return send_file(doc_path, mimetype="application/pdf")
+        if ext in (".png", ".jpg", ".jpeg"):
+            mt = "image/png" if ext == ".png" else "image/jpeg"
+            return send_file(doc_path, mimetype=mt)
+        return send_file(doc_path)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/llm/<sample_id>")
 def get_llm_outputs(sample_id):
-    """Return detailed_analysis and warnings for the given Sample ID from LLM_outputs.json"""
+    """Return LLM outputs for the given Sample ID depending on project."""
     try:
         project_key = _get_project_key()
         cfg, _, err = _get_project_config(project_key)
         if not cfg:
             return jsonify({"error": err}), 400
-        llm_path: Path | None = cfg.get("llm_outputs")
         print(f"[DEBUG] LLM lookup for Sample ID: {sample_id} project={project_key}")
+
+        # Prompt Enhancer: no LLM outputs
+        if project_key == 'promptenhancer':
+            return jsonify({
+                "sample_id": sample_id,
+                "warnings": [],
+                "project": project_key,
+            })
+
+        llm_path: Path | None = cfg.get("llm_outputs")
         if not llm_path or not llm_path.exists():
             print(f"[ERROR] LLM file not found at: {llm_path}")
             return jsonify({"error": "LLM outputs file not found"}), 404
-        # Use utf-8-sig to handle potential BOM
+
         try:
             with open(llm_path, 'r', encoding='utf-8-sig') as f:
                 data = json.load(f)
         except Exception as je:
             print(f"[ERROR] Failed to parse LLM JSON: {je}")
             return jsonify({"error": f"Failed to parse LLM JSON: {je}"}), 500
-        # Normalize both sides to string and strip whitespace
-        pr_norm = str(sample_id).strip()
-        def norm(val):
-            return str(val).strip() if val is not None else None
-        # Find entry by sample_id
-        match = next((entry for entry in data if norm(entry.get('sample_id')) == pr_norm), None)
-        print(f"[DEBUG] LLM match found: {bool(match)} with data {data}")
-        
+
+        req_norm = str(sample_id).strip()
+        if project_key == 'antenna' and req_norm.lower().endswith('.pdf'):
+            req_norm_base = req_norm[:-4]
+        else:
+            req_norm_base = req_norm
+
+        def norm(val: object) -> str | None:
+            if val is None:
+                return None
+            s = str(val).strip()
+            return s[:-4] if s.lower().endswith('.pdf') else s
+
+        match = None
+        if isinstance(data, list):
+            for entry in data:
+                if not isinstance(entry, dict):
+                    continue
+                sid = norm(entry.get('sample_id'))
+                if sid == req_norm_base:
+                    match = entry
+                    break
+        print(f"[DEBUG] LLM match found (project={project_key}): {bool(match)}")
+
         if not match:
             return jsonify({"error": "No LLM outputs for this Sample ID"}), 404
+
+        if project_key == 'antenna':
+            final_output = match.get('final_output')
+            if isinstance(final_output, list):
+                final_list = [str(x) for x in final_output]
+            elif final_output is None:
+                final_list = []
+            else:
+                final_list = [str(final_output)]
+            return jsonify({
+                "sample_id": sample_id,
+                "final_output": final_list,
+                "warnings": final_list,
+                "project": project_key,
+            })
+
         return jsonify({
             "sample_id": sample_id,
             "detailed_analysis": match.get('detailed_analysis'),
@@ -407,6 +511,34 @@ def list_projects():
             "orchestration": bool(cfg.get("orchestration_url")),
         })
     return jsonify({"projects": result})
+
+
+@app.route("/api/documents")
+def list_documents():
+    """List documents for the active project; used by Prompt Enhancer to return PNGs without sample IDs."""
+    try:
+        project_key = _get_project_key()
+        cfg, valid, err = _get_project_config(project_key)
+        if not cfg:
+            return jsonify({"error": err}), 400
+        if project_key != "promptenhancer":
+            return jsonify({"error": "Documents listing is only available for Prompt Enhancer"}), 400
+        data_dir: Path = cfg.get("data_dir")
+        if not data_dir or not data_dir.exists():
+            return jsonify({"error": err or "Data directory not found"}), 400
+        files = [p.name for p in data_dir.glob("*.png")] + [p.name for p in data_dir.glob("*.PNG")] + [p.name for p in data_dir.glob("*.jpg")] + [p.name for p in data_dir.glob("*.jpeg")] + [p.name for p in data_dir.glob("*.JPG")] + [p.name for p in data_dir.glob("*.JPEG")]
+        # Unique and sorted case-insensitively
+        seen = set()
+        docs = []
+        for name in sorted(files, key=lambda s: s.lower()):
+            low = name.lower()
+            if low in seen:
+                continue
+            seen.add(low)
+            docs.append(name)
+        return jsonify({"documents": docs, "count": len(docs), "project": project_key})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/orchestration")
