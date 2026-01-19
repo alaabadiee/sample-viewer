@@ -1,4 +1,4 @@
-# Audit UI
+# Sample Viewer
 
 A small Flask app to browse documents and outputs for multiple projects:
 
