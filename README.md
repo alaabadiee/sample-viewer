@@ -137,3 +137,17 @@ python app.py
 
 Stop the server with Ctrl+C.
 
+## Use Cases data (private)
+- Download the dataset from the private drive:
+  - [Use_Cases Drive (private)](https://gccinnovative-my.sharepoint.com/:f:/g/personal/a_badie_genor_com/IgBiNXsntyr3RLSVCaQ-RZAjAQPtbQPtyyNrOQyAT5g-Nzo?e=guNbCL)
+- Extract so the structure is:
+  - Use Cases/
+    - Audit/
+    - Antenna/
+    - Smart Judge/
+    - Prompt Enhancer/
+- Place the "Use Cases" folder next to app.py (default), or set the environment variable:
+  - Windows (PowerShell): `$env:USE_CASES_DIR="C:\path\to\Use Cases"`
+  - macOS/Linux: `export USE_CASES_DIR="/path/to/Use Cases"`
+- Access is restricted; ensure recipients have permission to the private link.
+
