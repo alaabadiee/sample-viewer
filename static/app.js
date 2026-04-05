@@ -398,9 +398,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 orchLink.href = `/orchestration/${encodeURIComponent(projectKey)}`;
                 orchLink.title = `Open orchestration for ${projectKey}`;
             }
-            // Ensure right panel visible for non-Prompt Enhancer
+            // Ensure sample selector and right panel visible for non-Prompt Enhancer
+            if (sampleSelectWrapper) sampleSelectWrapper.style.display = '';
             const dataSection = document.querySelector('.data-section');
+            const itemsSection = document.getElementById('itemsSection');
+            const warningsSection = document.getElementById('warningsSection');
             if (dataSection) dataSection.style.display = '';
+            if (itemsSection) itemsSection.style.display = '';
+            if (warningsSection) warningsSection.style.display = '';
             // Restore counters for non-Prompt Enhancer
             if (pdfCounter) { pdfCounter.style.display = ''; }
             if (pdfIndicator) { pdfIndicator.style.display = ''; }
@@ -580,6 +585,23 @@ if (projectSelect) {
                 }
                 return;
             }
+
+            // For non-Prompt Enhancer projects: restore UI elements
+            if (sampleSelectWrapper) sampleSelectWrapper.style.display = '';
+            const itemsSection = document.getElementById('itemsSection');
+            const metadataSection = document.getElementById('metadataSection');
+            const warningsSection = document.getElementById('warningsSection');
+            const dataSection = document.querySelector('.data-section');
+            if (pdfCounter) pdfCounter.style.display = '';
+            if (pdfIndicator) pdfIndicator.style.display = '';
+            if (itemsSection) itemsSection.style.display = '';
+            if (metadataSection) metadataSection.style.display = 'none'; // Smart Judge specific
+            if (warningsSection) warningsSection.style.display = '';
+            if (dataSection) dataSection.style.display = '';
+            // Clear content area until sample is selected
+            contentArea.classList.add('hidden');
+            emptyState.style.display = '';
+            errorState.classList.add('hidden');
 
             const resp = await fetch(`/api/sample_ids?project=${encodeURIComponent(projectKey)}`);
             const data = await resp.json();
@@ -825,10 +847,10 @@ function setSearchLoading(isLoading) {
 async function loadPdf(index) {
     if (!currentData || !currentData.pdfs[index]) return;
     const projectKey = projectSelect ? (projectSelect.value || 'audit') : 'audit';
-    const isAntenna = projectKey === 'antenna';
+    const isInvoicing = projectKey === 'invoicing';
     const isPrompt = projectKey === 'promptenhancer';
     const fileName = currentData.pdfs[index];
-    const pdfUrl = isAntenna
+    const pdfUrl = isInvoicing
         ? `/api/pdf/${encodeURIComponent(fileName)}/${encodeURIComponent(fileName)}?project=${encodeURIComponent(projectKey)}`
         : `/api/pdf/${encodeURIComponent(currentData.sample_id)}/${encodeURIComponent(fileName)}?project=${encodeURIComponent(projectKey)}`;
     ensurePdfCanvas();

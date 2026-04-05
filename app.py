@@ -20,12 +20,12 @@ AUDIT_EXCEL_FILE = AUDIT_DIR / "Metadata.xlsx"
 AUDIT_LLM_OUTPUTS = AUDIT_DIR / "LLM_outputs.json"
 AUDIT_ORCHESTRATION_URL = os.getenv("AUDIT_ORCHESTRATION_URL")
 
-# Default configuration (Antenna project)
-ANTENNA_DIR = USE_CASES_DIR / "Antenna"
-ANTENNA_DATA_DIR = ANTENNA_DIR / "data"
-ANTENNA_EXCEL_FILE = ANTENNA_DIR / "PO Database.xlsx"
-ANTENNA_LLM_OUTPUTS = ANTENNA_DIR / "LLM_outputs.json"
-ANTENNA_ORCHESTRATION_URL = os.getenv("ANTENNA_ORCHESTRATION_URL")
+# Default configuration (Invoicing project)
+INVOICING_DIR = USE_CASES_DIR / "Invoicing"
+INVOICING_DATA_DIR = INVOICING_DIR / "data"
+INVOICING_EXCEL_FILE = INVOICING_DIR / "PO Database.xlsx"
+INVOICING_LLM_OUTPUTS = INVOICING_DIR / "LLM_outputs.json"
+INVOICING_ORCHESTRATION_URL = os.getenv("INVOICING_ORCHESTRATION_URL")
 
 # Default configuration (Smart Judge project)
 SMART_JUDGE_DIR = USE_CASES_DIR / "Smart Judge"
@@ -47,12 +47,12 @@ PROJECTS = {
         "llm_outputs": AUDIT_LLM_OUTPUTS,
         "orchestration_url": AUDIT_ORCHESTRATION_URL,
     },
-    "antenna": {
-        "label": "Invoice Ingestion",
-        "data_dir": ANTENNA_DATA_DIR,
-        "excel_file": ANTENNA_EXCEL_FILE,
-        "llm_outputs": ANTENNA_LLM_OUTPUTS,
-        "orchestration_url": ANTENNA_ORCHESTRATION_URL,
+    "invoicing": {
+        "label": "Invoicing",
+        "data_dir": INVOICING_DATA_DIR,
+        "excel_file": INVOICING_EXCEL_FILE,
+        "llm_outputs": INVOICING_LLM_OUTPUTS,
+        "orchestration_url": INVOICING_ORCHESTRATION_URL,
     },
     "smartjudge": {
         "label": "Smart Judge",
@@ -93,7 +93,7 @@ def _get_project_config(project_key: str):
         if not excel_file or not Path(excel_file).exists():
             missing.append("excel_file")
         # llm_outputs optional for audit
-    elif project_key == "antenna":
+    elif project_key == "invoicing":
         # Only data_dir required
         if not data_dir or not data_dir.exists():
             missing.append("data_dir")
@@ -134,13 +134,13 @@ def get_sample_data(sample_id):
         if not cfg:
             return jsonify({"error": err}), 400
 
-        # For Antenna, Smart Judge, and Prompt Enhancer, validation is relaxed per project rules
-        if project_key not in ("antenna", "smartjudge", "promptenhancer") and not valid:
+        # For Invoicing, Smart Judge, and Prompt Enhancer, validation is relaxed per project rules
+        if project_key not in ("invoicing", "smartjudge", "promptenhancer") and not valid:
             return jsonify({"error": err}), 400
 
         data_dir: Path = cfg.get("data_dir") if cfg else None
 
-        if project_key == "antenna":
+        if project_key == "invoicing":
             # Each PDF in data folder is a sample; sample_id is the filename
             pdf_path = data_dir / str(sample_id)
             if not pdf_path.exists() or not pdf_path.is_file():
@@ -160,13 +160,13 @@ def get_sample_data(sample_id):
                         sample_norm = str(sample_id).strip()
                         matches = df[df[sample_col].astype(str).str.strip() == sample_norm]
                         short_texts = matches[material_col].dropna().astype(str).tolist()
-                        print(f"[DEBUG] Antenna Excel match: {len(short_texts)} 'Material Description' items for Sample ID={sample_id}")
+                        print(f"[DEBUG] Invoicing Excel match: {len(short_texts)} 'Material Description' items for Sample ID={sample_id}")
                     else:
-                        print("[DEBUG] Antenna Excel missing required columns 'Sample ID' and/or 'Material Description'")
+                        print("[DEBUG] Invoicing Excel missing required columns 'Sample ID' and/or 'Material Description'")
                 except Exception as xe:
-                    print(f"[DEBUG] Failed to read Antenna Excel for items: {xe}")
+                    print(f"[DEBUG] Failed to read Invoicing Excel for items: {xe}")
             else:
-                print("[DEBUG] Antenna Excel file not configured or missing; returning empty items list")
+                print("[DEBUG] Invoicing Excel file not configured or missing; returning empty items list")
 
             pdfs = [str(sample_id)]
             result = {
@@ -177,7 +177,7 @@ def get_sample_data(sample_id):
                 "text_count": len(short_texts),
                 "project": project_key,
             }
-            print(f"[DEBUG] Returning antenna result: {result['pdf_count']} PDFs, {result['text_count']} items")
+            print(f"[DEBUG] Returning invoicing result: {result['pdf_count']} PDFs, {result['text_count']} items")
             return jsonify(result)
 
         elif project_key == "promptenhancer":
@@ -274,8 +274,8 @@ def get_sample_ids():
         if not cfg:
             return jsonify({"error": err}), 400
 
-        # Antenna: use filenames in data_dir
-        if project_key == "antenna":
+        # Invoicing: use filenames in data_dir
+        if project_key == "invoicing":
             data_dir: Path = cfg["data_dir"]
             if not data_dir or not data_dir.exists():
                 return jsonify({"error": err or "Data directory not found"}), 400
@@ -354,7 +354,7 @@ def get_pdf(sample_id, filename):
             return jsonify({"error": err or "Data directory not found"}), 400
         data_dir: Path = cfg["data_dir"]
 
-        if project_key == "antenna":
+        if project_key == "invoicing":
             # Files are flat under data_dir; prefer filename
             doc_path = data_dir / filename
             if not doc_path.exists():
@@ -410,7 +410,7 @@ def get_llm_outputs(sample_id):
             return jsonify({"error": f"Failed to parse LLM JSON: {je}"}), 500
 
         req_norm = str(sample_id).strip()
-        if project_key == 'antenna' and req_norm.lower().endswith('.pdf'):
+        if project_key == 'invoicing' and req_norm.lower().endswith('.pdf'):
             req_norm_base = req_norm[:-4]
         else:
             req_norm_base = req_norm
@@ -435,7 +435,7 @@ def get_llm_outputs(sample_id):
         if not match:
             return jsonify({"error": "No LLM outputs for this Sample ID"}), 404
 
-        if project_key == 'antenna':
+        if project_key == 'invoicing':
             final_output = match.get('final_output')
             if isinstance(final_output, list):
                 final_list = [str(x) for x in final_output]

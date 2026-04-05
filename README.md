@@ -1,10 +1,11 @@
-# Sample Viewer
+# Demo Document Viewer
 
 A small Flask app to browse documents and outputs for multiple projects:
 
 - Auditing (default)
-- Invoice Ingestion (Antenna)
+- Invoicing
 - Smart Judge
+- Prompt Enhancer
 
 The app reads data from the local "Use Cases" folder next to `app.py` by default, with optional environment overrides.
 
@@ -34,7 +35,7 @@ Key folders and files expected by the app:
 	- `data/<sample_id>/*.PDF`
 	- `Metadata.xlsx`
 	- `LLM_outputs.json` (optional)
-- `Use Cases/Antenna/`
+- `Use Cases/Invoicing/`
 	- `data/*.pdf` (each file is a sample)
 	- `PO Database.xlsx` (optional, not required by the UI)
 	- `LLM_outputs.json` (optional)
@@ -42,6 +43,8 @@ Key folders and files expected by the app:
 	- `data/<sample_id>/*.pdf`
 	- `data/<sample_id>/metadata.json`
 	- `LLM_outputs.json` (required for listing sample IDs)
+- `Use Cases/Prompt Enhancer/`
+	- `data/`
 
 By default, `Use Cases` is resolved relative to `app.py`. You can override it with an environment variable.
 
@@ -55,24 +58,26 @@ Environment variables (optional):
 		set USE_CASES_DIR=C:\Users\a.badie\Downloads\Audit UI\Use Cases
 		```
 - `AUDIT_ORCHESTRATION_URL` — External URL to redirect for Audit orchestration.
-- `ANTENNA_ORCHESTRATION_URL` — External URL to redirect for Antenna orchestration.
+- `INVOICING_ORCHESTRATION_URL` — External URL to redirect for Invoicing orchestration.
 - `SMART_JUDGE_ORCHESTRATION_URL` — External URL to redirect for Smart Judge orchestration.
 
 If an orchestration URL is set, visiting `/orchestration` or `/orchestration/<project>` will redirect to it. Otherwise, a simple info page is shown.
 
 ## Selecting a project
 
-The UI supports three projects. You can switch context via a query parameter:
+The UI supports four projects. You can switch context via a query parameter:
 
 - `?project=audit` (default)
-- `?project=antenna`
+- `?project=invoicing`
 - `?project=smartjudge`
+- `?project=promptenhancer`
 
 Examples:
 
 - Main page for Audit: `http://localhost:5000/`
-- Main page for Antenna: `http://localhost:5000/?project=antenna`
+- Main page for Invoicing: `http://localhost:5000/?project=invoicing`
 - Main page for Smart Judge: `http://localhost:5000/?project=smartjudge`
+- Main page for Prompt Enhancer: `http://localhost:5000/?project=promptenhancer`
 
 ## API endpoints
 
@@ -80,17 +85,17 @@ All endpoints accept the optional `project` query param to select context.
 
 - `GET /api/sample/<sample_id>`
 	- Audit: returns short texts from `Metadata.xlsx` and PDFs from `data/<sample_id>/`.
-	- Antenna: treats `sample_id` as a PDF filename in `data/`; returns the single file.
+	- Invoicing: treats `sample_id` as a PDF filename in `data/`; returns the single file.
 	- Smart Judge: returns PDFs under `data/<sample_id>/` and empty `short_texts`.
 
 - `GET /api/sample_ids`
 	- Audit: distinct `Purch.Req.` values from `Metadata.xlsx`.
-	- Antenna: unique PDF filenames (case-insensitive) under `data/`.
+	- Invoicing: unique PDF filenames (case-insensitive) under `data/`.
 	- Smart Judge: `sample_id` values parsed from `LLM_outputs.json`.
 
 - `GET /api/pdf/<sample_id>/<filename>`
 	- Serves a PDF file.
-	- Antenna: files are flat under `data/`; uses `<filename>` directly (falls back to `<sample_id>` if needed).
+	- Invoicing: files are flat under `data/`; uses `<filename>` directly (falls back to `<sample_id>` if needed).
 	- Other projects: files are under `data/<sample_id>/`.
 
 - `GET /api/llm/<sample_id>`

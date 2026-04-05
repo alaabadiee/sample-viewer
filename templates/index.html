@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sample Viewer</title>
+    <title>Demo Document Viewer</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon-dev.ico') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -20,7 +20,7 @@
                     <path d="M5 10v10a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-6h2v6a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V10"></path>
                 </svg>
             </a>
-            <h1>Sample Viewer</h1>
+            <h1>Demo Document Viewer</h1>
             <div class="controls">
                 <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme">
                     <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
@@ -56,7 +56,7 @@
                     <select id="projectSelect" class="visually-hidden-select" aria-label="Select project">
                         <option value="" selected disabled>Use Case…</option>
                         <option value="audit">Auditing</option>
-                        <option value="antenna">Invoice Ingestion</option>
+                        <option value="invoicing">Invoicing</option>
                         <option value="smartjudge">Smart Judge</option>
                         <option value="promptenhancer">Prompt Enhancer</option>
                     </select>
@@ -155,7 +155,7 @@
                         </div>
                     </div>
 
-                    <!-- Items in Database (Auditing/Invoice Ingestion) -->
+                    <!-- Items in Database (Auditing/Invoicing) -->
                     <div class="collapsible-section" id="itemsSection">
                         <div class="collapsible-header" role="button" tabindex="0">
                             <span>Items in Database</span>
