@@ -72,9 +72,9 @@ PROJECTS = {
 
 
 def _get_project_key():
-    """Resolve project from query param; default to 'audit' for backward compatibility."""
+    """Resolve project from query param."""
     key = (request.args.get("project") or "").strip().lower()
-    return key or "audit"
+    return key
 
 
 def _get_project_config(project_key: str):

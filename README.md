@@ -2,7 +2,7 @@
 
 A small Flask app to browse documents and outputs for multiple projects:
 
-- Auditing (default)
+- Auditing
 - Invoicing
 - Smart Judge
 - Prompt Enhancer
@@ -67,7 +67,7 @@ If an orchestration URL is set, visiting `/orchestration` or `/orchestration/<pr
 
 The UI supports four projects. You can switch context via a query parameter:
 
-- `?project=audit` (default)
+- `?project=audit`
 - `?project=invoicing`
 - `?project=smartjudge`
 - `?project=promptenhancer`
