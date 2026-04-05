@@ -675,23 +675,23 @@ async function handleSearch() {
     // Hide final output section for both Smart Judge and Prompt Enhancer
     if (warningsSection) warningsSection.style.display = (isPrompt || isSmartActive) ? 'none' : '';
 
-        // Load LLM outputs for this Sample ID and populate sections (skip for Prompt Enhancer)
+        // Load Final outputs for this Sample ID and populate sections (skip for Prompt Enhancer)
         try {
             if (isPrompt) {
                 const warningsPre = document.getElementById('warningsJson');
                 if (warningsPre) warningsPre.textContent = '';
             } else {
-            const llmResp = await fetch(`/api/llm/${encodeURIComponent(currentData.sample_id)}?project=${encodeURIComponent(projectKey)}`);
-            const llmData = await llmResp.json();
+            const finalOutputsResp = await fetch(`/api/finalOutputs/${encodeURIComponent(currentData.sample_id)}?project=${encodeURIComponent(projectKey)}`);
+            const finalOutputsData = await finalOutputsResp.json();
             const warningsPre = document.getElementById('warningsJson');
             const warningsSection = document.getElementById('warningsSection');
-            if (llmResp.ok) {
+            if (finalOutputsResp.ok) {
                 // Pretty print warnings (array or object)
                 let warningsStr = '';
-                if (Array.isArray(llmData.warnings) && llmData.warnings.length) {
-                    warningsStr = llmData.warnings.map(w => `- ${w}`).join('\n');
-                } else if (llmData.warnings) {
-                    warningsStr = JSON.stringify(llmData.warnings, null, 2);
+                if (Array.isArray(finalOutputsData.warnings) && finalOutputsData.warnings.length) {
+                    warningsStr = finalOutputsData.warnings.map(w => `- ${w}`).join('\n');
+                } else if (finalOutputsData.warnings) {
+                    warningsStr = JSON.stringify(finalOutputsData.warnings, null, 2);
                 } else {
                     warningsStr = 'No warnings available for this Sample ID.';
                 }
@@ -720,7 +720,7 @@ async function handleSearch() {
             }
             }
         } catch (e) {
-            console.error('Failed to load LLM outputs:', e);
+            console.error('Failed to load Final outputs:', e);
             if (projectKey === 'smartjudge' && metadataJson) {
                 metadataJson.textContent = 'Failed to load metadata.';
             }

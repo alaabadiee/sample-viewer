@@ -17,20 +17,20 @@ USE_CASES_DIR = Path(
 AUDIT_DIR = USE_CASES_DIR / "Audit"
 AUDIT_DATA_DIR = AUDIT_DIR / "data"
 AUDIT_EXCEL_FILE = AUDIT_DIR / "Metadata.xlsx"
-AUDIT_LLM_OUTPUTS = AUDIT_DIR / "LLM_outputs.json"
+AUDIT_FINAL_OUTPUTS = AUDIT_DIR / "final_outputs.json"
 AUDIT_ORCHESTRATION_URL = os.getenv("AUDIT_ORCHESTRATION_URL")
 
 # Default configuration (Invoicing project)
 INVOICING_DIR = USE_CASES_DIR / "Invoicing"
 INVOICING_DATA_DIR = INVOICING_DIR / "data"
 INVOICING_EXCEL_FILE = INVOICING_DIR / "PO Database.xlsx"
-INVOICING_LLM_OUTPUTS = INVOICING_DIR / "LLM_outputs.json"
+INVOICING_FINAL_OUTPUTS = INVOICING_DIR / "final_outputs.json"
 INVOICING_ORCHESTRATION_URL = os.getenv("INVOICING_ORCHESTRATION_URL")
 
 # Default configuration (Smart Judge project)
 SMART_JUDGE_DIR = USE_CASES_DIR / "Smart Judge"
 SMART_JUDGE_DATA_DIR = SMART_JUDGE_DIR / "data"
-SMART_JUDGE_LLM_OUTPUTS = SMART_JUDGE_DIR / "LLM_outputs.json"
+SMART_JUDGE_FINAL_OUTPUTS = SMART_JUDGE_DIR / "final_outputs.json"
 SMART_JUDGE_ORCHESTRATION_URL = os.getenv("SMART_JUDGE_ORCHESTRATION_URL")
 
 # Default configuration (Prompt Enhancer project)
@@ -44,28 +44,28 @@ PROJECTS = {
         "label": "Auditing",
         "data_dir": AUDIT_DATA_DIR,
         "excel_file": AUDIT_EXCEL_FILE,
-        "llm_outputs": AUDIT_LLM_OUTPUTS,
+        "final_outputs": AUDIT_FINAL_OUTPUTS,
         "orchestration_url": AUDIT_ORCHESTRATION_URL,
     },
     "invoicing": {
         "label": "Invoicing",
         "data_dir": INVOICING_DATA_DIR,
         "excel_file": INVOICING_EXCEL_FILE,
-        "llm_outputs": INVOICING_LLM_OUTPUTS,
+        "final_outputs": INVOICING_FINAL_OUTPUTS,
         "orchestration_url": INVOICING_ORCHESTRATION_URL,
     },
     "smartjudge": {
         "label": "Smart Judge",
         "data_dir": SMART_JUDGE_DATA_DIR,
         "excel_file": None,
-        "llm_outputs": SMART_JUDGE_LLM_OUTPUTS,
+        "final_outputs": SMART_JUDGE_FINAL_OUTPUTS,
         "orchestration_url": SMART_JUDGE_ORCHESTRATION_URL,
     },
     "promptenhancer": {
         "label": "Prompt Enhancer",
         "data_dir": PROMPT_ENHANCER_DATA_DIR,
         "excel_file": None,
-        "llm_outputs": None,
+        "final_outputs": None,
         "orchestration_url": PROMPT_ENHANCER_ORCHESTRATION_URL,
     },
 }
@@ -84,7 +84,7 @@ def _get_project_config(project_key: str):
         return None, False, f"Unknown project '{project_key}'. Available: {', '.join(PROJECTS.keys())}"
     data_dir: Path | None = cfg.get("data_dir")
     excel_file: Path | None = cfg.get("excel_file")
-    llm_outputs: Path | None = cfg.get("llm_outputs")
+    final_outputs: Path | None = cfg.get("final_outputs")
 
     missing = []
     if project_key == "audit":
@@ -92,15 +92,15 @@ def _get_project_config(project_key: str):
             missing.append("data_dir")
         if not excel_file or not Path(excel_file).exists():
             missing.append("excel_file")
-        # llm_outputs optional for audit
+        # final_outputs optional for audit
     elif project_key == "invoicing":
         # Only data_dir required
         if not data_dir or not data_dir.exists():
             missing.append("data_dir")
     elif project_key == "smartjudge":
-        # LLM outputs required for sample IDs; data_dir required for serving PDFs
-        if not llm_outputs or not Path(llm_outputs).exists():
-            missing.append("llm_outputs")
+        # Final outputs required for sample IDs; data_dir required for serving PDFs
+        if not final_outputs or not Path(final_outputs).exists():
+            missing.append("final_outputs")
         if not data_dir or not data_dir.exists():
             missing.append("data_dir")
     elif project_key == "promptenhancer":
@@ -198,7 +198,7 @@ def get_sample_data(sample_id):
             return jsonify(result)
 
         elif project_key == "smartjudge":
-            # Smart Judge: sample IDs come from LLM outputs; PDFs live under data/<sample_id>/
+            # Smart Judge: sample IDs come from Final outputs; PDFs live under data/<sample_id>/
             short_texts: list[str] = []
             pdf_folder = data_dir / str(sample_id)
             pdfs: list[str] = []
@@ -290,16 +290,16 @@ def get_sample_ids():
                 ids_sorted.append(name)
             return jsonify({"ids": ids_sorted, "count": len(ids_sorted), "project": project_key})
 
-        # Smart Judge: from LLM_outputs.json
+        # Smart Judge: from final_outputs.json
         if project_key == "smartjudge":
-            llm_path: Path | None = cfg.get("llm_outputs")
-            if not llm_path or not llm_path.exists():
-                return jsonify({"error": err or "LLM outputs file not found"}), 400
+            final_outputs_path: Path | None = cfg.get("final_outputs")
+            if not final_outputs_path or not final_outputs_path.exists():
+                return jsonify({"error": err or "Final outputs file not found"}), 400
             try:
-                with open(llm_path, 'r', encoding='utf-8-sig') as f:
+                with open(final_outputs_path, 'r', encoding='utf-8-sig') as f:
                     data = json.load(f)
             except Exception as je:
-                return jsonify({"error": f"Failed to parse LLM JSON: {je}"}), 500
+                return jsonify({"error": f"Failed to parse Final Outputs JSON: {je}"}), 500
             ids: list[str] = []
             if isinstance(data, list):
                 for entry in data:
@@ -379,17 +379,17 @@ def get_pdf(sample_id, filename):
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/llm/<sample_id>")
-def get_llm_outputs(sample_id):
-    """Return LLM outputs for the given Sample ID depending on project."""
+@app.route("/api/finalOutputs/<sample_id>")
+def get_final_outputs(sample_id):
+    """Return final outputs for the given Sample ID depending on project."""
     try:
         project_key = _get_project_key()
         cfg, _, err = _get_project_config(project_key)
         if not cfg:
             return jsonify({"error": err}), 400
-        print(f"[DEBUG] LLM lookup for Sample ID: {sample_id} project={project_key}")
+        print(f"[DEBUG] Final Outputs lookup for Sample ID: {sample_id} project={project_key}")
 
-        # Prompt Enhancer: no LLM outputs
+        # Prompt Enhancer: no Final outputs
         if project_key == 'promptenhancer':
             return jsonify({
                 "sample_id": sample_id,
@@ -397,17 +397,17 @@ def get_llm_outputs(sample_id):
                 "project": project_key,
             })
 
-        llm_path: Path | None = cfg.get("llm_outputs")
-        if not llm_path or not llm_path.exists():
-            print(f"[ERROR] LLM file not found at: {llm_path}")
-            return jsonify({"error": "LLM outputs file not found"}), 404
+        final_outputs_path: Path | None = cfg.get("final_outputs")
+        if not final_outputs_path or not final_outputs_path.exists():
+            print(f"[ERROR] Final outputs file not found at: {final_outputs_path}")
+            return jsonify({"error": "Final outputs file not found"}), 404
 
         try:
-            with open(llm_path, 'r', encoding='utf-8-sig') as f:
+            with open(final_outputs_path, 'r', encoding='utf-8-sig') as f:
                 data = json.load(f)
         except Exception as je:
-            print(f"[ERROR] Failed to parse LLM JSON: {je}")
-            return jsonify({"error": f"Failed to parse LLM JSON: {je}"}), 500
+            print(f"[ERROR] Failed to parse Final Outputs JSON: {je}")
+            return jsonify({"error": f"Failed to parse Final Outputs JSON: {je}"}), 500
 
         req_norm = str(sample_id).strip()
         if project_key == 'invoicing' and req_norm.lower().endswith('.pdf'):
@@ -430,10 +430,10 @@ def get_llm_outputs(sample_id):
                 if sid == req_norm_base:
                     match = entry
                     break
-        print(f"[DEBUG] LLM match found (project={project_key}): {bool(match)}")
+        print(f"[DEBUG] Final Outputs match found (project={project_key}): {bool(match)}")
 
         if not match:
-            return jsonify({"error": "No LLM outputs for this Sample ID"}), 404
+            return jsonify({"error": "No Final Outputs for this Sample ID"}), 404
 
         if project_key == 'invoicing':
             final_output = match.get('final_output')
@@ -457,7 +457,7 @@ def get_llm_outputs(sample_id):
             "project": project_key,
         })
     except Exception as e:
-        print(f"[ERROR] Exception in get_llm_outputs: {e}")
+        print(f"[ERROR] Exception in get_final_outputs: {e}")
         return jsonify({"error": str(e)}), 500
 
 
