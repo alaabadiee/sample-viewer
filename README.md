@@ -34,15 +34,15 @@ Key folders and files expected by the app:
 - `Use Cases/Audit/`
 	- `data/<sample_id>/*.PDF`
 	- `Metadata.xlsx`
-	- `LLM_outputs.json` (optional)
+	- `final_outputs.json` (optional)
 - `Use Cases/Invoicing/`
 	- `data/*.pdf` (each file is a sample)
 	- `PO Database.xlsx` (optional, not required by the UI)
-	- `LLM_outputs.json` (optional)
+	- `final_outputs.json` (optional)
 - `Use Cases/Smart Judge/`
 	- `data/<sample_id>/*.pdf`
 	- `data/<sample_id>/metadata.json`
-	- `LLM_outputs.json` (required for listing sample IDs)
+	- `final_outputs.json` (required for listing sample IDs)
 - `Use Cases/Prompt Enhancer/`
 	- `data/`
 
@@ -91,15 +91,15 @@ All endpoints accept the optional `project` query param to select context.
 - `GET /api/sample_ids`
 	- Audit: distinct `Purch.Req.` values from `Metadata.xlsx`.
 	- Invoicing: unique PDF filenames (case-insensitive) under `data/`.
-	- Smart Judge: `sample_id` values parsed from `LLM_outputs.json`.
+	- Smart Judge: `sample_id` values parsed from `final_outputs.json`.
 
 - `GET /api/pdf/<sample_id>/<filename>`
 	- Serves a PDF file.
 	- Invoicing: files are flat under `data/`; uses `<filename>` directly (falls back to `<sample_id>` if needed).
 	- Other projects: files are under `data/<sample_id>/`.
 
-- `GET /api/llm/<sample_id>`
-	- Returns `detailed_analysis` and `warnings` for the given sample from `LLM_outputs.json` in the selected project.
+- `GET /api/finalOutputs/<sample_id>`
+	- Returns `detailed_analysis` and `warnings` for the given sample from `final_outputs.json` in the selected project.
 
 - `GET /api/metadata/<sample_id>`
 	- Smart Judge only: returns `metadata.json` from `data/<sample_id>/`.
@@ -114,17 +114,17 @@ All endpoints accept the optional `project` query param to select context.
 
 - Audit:
 	- Requires: `Use Cases/Audit/data/` and `Use Cases/Audit/Metadata.xlsx`.
-	- `LLM_outputs.json` optional.
-- Antenna:
-	- Requires: `Use Cases/Antenna/data/` only (Excel/LLM optional).
+	- `final_outputs.json` optional.
+- Invoicing:
+	- Requires: `Use Cases/Invoicing/data/`.
 - Smart Judge:
-	- Requires: `Use Cases/Smart Judge/data/` and `Use Cases/Smart Judge/LLM_outputs.json`.
+	- Requires: `Use Cases/Smart Judge/data/` and `Use Cases/Smart Judge/final_outputs.json`.
 
 ## Common issues
 
 - 404 for PDFs: verify the file casing and location. The app handles `.pdf` and `.PDF` and deduplicates case-insensitively, but paths must exist.
 - Excel errors: ensure `Metadata.xlsx` has a `Purch.Req.` column and the expected sheet.
-- JSON parse errors: check `LLM_outputs.json` and `metadata.json` for valid JSON; the app reads LLM JSON with `utf-8-sig` to tolerate BOM.
+- JSON parse errors: check `final_outputs.json` and `metadata.json` for valid JSON; the app reads Final Outputs JSON with `utf-8-sig` to tolerate BOM.
 
 ## Development notes
 
@@ -144,11 +144,11 @@ Stop the server with Ctrl+C.
 
 ## Use Cases data (private)
 - Download the dataset from the private drive:
-  - [Use_Cases Drive (private)](https://gccinnovative-my.sharepoint.com/:f:/g/personal/a_badie_genor_com/IgBiNXsntyr3RLSVCaQ-RZAjAQPtbQPtyyNrOQyAT5g-Nzo?e=guNbCL)
+  - [Use_Cases Drive (private)](https://gccinnovative-my.sharepoint.com/:f:/g/personal/a_badie_genorplatform_onmicrosoft_com_ext__genor_com/IgBiNXsntyr3RLSVCaQ-RZAjAQPtbQPtyyNrOQyAT5g-Nzo?e=FY37eJ)
 - Extract so the structure is:
   - Use Cases/
     - Audit/
-    - Antenna/
+    - Invoicing/
     - Smart Judge/
     - Prompt Enhancer/
 - Place the "Use Cases" folder next to app.py (default), or set the environment variable:
