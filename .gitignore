@@ -64,3 +64,11 @@ Desktop.ini
 .ropeproject/
 profile_default/
 ipython_config.py
+
+# Sensitive data
+Use Cases/
+use_cases/
+*.xlsx
+*.json
+*.pdf
+*.PDF
