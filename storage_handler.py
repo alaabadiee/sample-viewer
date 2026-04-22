@@ -9,6 +9,10 @@ from typing import List, BinaryIO, Optional
 import tempfile
 from functools import lru_cache
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Check if Azure mode is enabled
 AZURE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 AZURE_CONTAINER_NAME = os.getenv("AZURE_CONTAINER_NAME", "use-cases")
@@ -23,6 +27,11 @@ if USE_AZURE:
     print(f"✓ Azure Blob Storage initialized: {AZURE_CONTAINER_NAME} container")
 else:
     print("✓ Using local filesystem storage")
+    print("WARNING: AZURE_STORAGE_CONNECTION_STRING not set!")
+    print("App will look for local files in 'Use Cases' folder.")
+    print("On Render, set environment variables:")
+    print("  - AZURE_STORAGE_CONNECTION_STRING")
+    print("  - AZURE_CONTAINER_NAME=use-cases")
 
 
 def normalize_path(path: str) -> str:
