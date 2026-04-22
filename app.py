@@ -4,14 +4,14 @@ from pathlib import Path
 import pandas as pd
 from flask import Flask, jsonify, render_template, send_file, request
 import json
+import storage_handler as storage
 
 app = Flask(__name__)
 
 # Resolve the base "Use Cases" directory. Allow override via env var USE_CASES_DIR.
 # Defaults to a folder named "Use Cases" next to this app.py file for portability.
-USE_CASES_DIR = Path(
-    os.getenv("USE_CASES_DIR") or (Path(__file__).resolve().parent / "Use Cases")
-).resolve()
+# When using Azure, this returns a virtual path.
+USE_CASES_DIR = storage.get_base_dir()
 
 # Default configuration (Audit project)
 AUDIT_DIR = USE_CASES_DIR / "Audit"
@@ -88,30 +88,30 @@ def _get_project_config(project_key: str):
 
     missing = []
     if project_key == "audit":
-        if not data_dir or not data_dir.exists():
+        if not data_dir or not storage.exists(data_dir):
             missing.append("data_dir")
-        if not excel_file or not Path(excel_file).exists():
+        if not excel_file or not storage.exists(Path(excel_file)):
             missing.append("excel_file")
         # final_outputs optional for audit
     elif project_key == "invoicing":
         # Only data_dir required
-        if not data_dir or not data_dir.exists():
+        if not data_dir or not storage.exists(data_dir):
             missing.append("data_dir")
     elif project_key == "smartjudge":
         # Final outputs required for sample IDs; data_dir required for serving PDFs
-        if not final_outputs or not Path(final_outputs).exists():
+        if not final_outputs or not storage.exists(Path(final_outputs)):
             missing.append("final_outputs")
-        if not data_dir or not data_dir.exists():
+        if not data_dir or not storage.exists(data_dir):
             missing.append("data_dir")
     elif project_key == "promptenhancer":
         # Only data_dir required; images (PNGs) only
-        if not data_dir or not data_dir.exists():
+        if not data_dir or not storage.exists(data_dir):
             missing.append("data_dir")
     else:
         # Default strict
-        if not data_dir or not data_dir.exists():
+        if not data_dir or not storage.exists(data_dir):
             missing.append("data_dir")
-        if not excel_file or not Path(excel_file).exists():
+        if not excel_file or not storage.exists(Path(excel_file)):
             missing.append("excel_file")
 
     valid = len(missing) == 0
@@ -143,15 +143,15 @@ def get_sample_data(sample_id):
         if project_key == "invoicing":
             # Each PDF in data folder is a sample; sample_id is the filename
             pdf_path = data_dir / str(sample_id)
-            if not pdf_path.exists() or not pdf_path.is_file():
+            if not storage.exists(pdf_path) or not storage.is_file(pdf_path):
                 return jsonify({"error": "Sample (PDF) not found"}), 404
 
             # Load items from Excel: match 'Sample ID' to sample_id and return 'Material Description'
             short_texts: list[str] = []
             excel_file: Path | None = cfg.get("excel_file")
-            if excel_file and excel_file.exists():
+            if excel_file and storage.exists(excel_file):
                 try:
-                    df = pd.read_excel(excel_file)
+                    df = storage.read_excel_custom(excel_file)
                     # Normalize columns; support slight variations
                     cols = {c.strip().lower(): c for c in df.columns if isinstance(c, str)}
                     sample_col = cols.get("sample id")
@@ -183,7 +183,7 @@ def get_sample_data(sample_id):
         elif project_key == "promptenhancer":
             # Prompt Enhancer: sample IDs are image files; only PNGs, no items or final outputs
             img_path = data_dir / str(sample_id)
-            if not img_path.exists() or not img_path.is_file():
+            if not storage.exists(img_path) or not storage.is_file(img_path):
                 return jsonify({"error": "Sample (PNG) not found"}), 404
             pngs = [str(sample_id)]
             result = {
@@ -202,8 +202,8 @@ def get_sample_data(sample_id):
             short_texts: list[str] = []
             pdf_folder = data_dir / str(sample_id)
             pdfs: list[str] = []
-            if pdf_folder.exists() and pdf_folder.is_dir():
-                files = [f.name for f in pdf_folder.glob("*.pdf")] + [f.name for f in pdf_folder.glob("*.PDF")]
+            if storage.exists(pdf_folder):
+                files = storage.glob_files(pdf_folder, "*.pdf") + storage.glob_files(pdf_folder, "*.PDF")
                 # Deduplicate case-insensitively and sort by lowercase for stable order
                 seen = set()
                 for name in sorted(files, key=lambda s: s.lower()):
@@ -229,7 +229,7 @@ def get_sample_data(sample_id):
         # Default (Audit)
         excel_path = cfg["excel_file"]
         print(f"[DEBUG] Reading Excel file: {excel_path}")
-        df = pd.read_excel(excel_path)
+        df = storage.read_excel_custom(excel_path)
         print(f"[DEBUG] Excel loaded. Shape: {df.shape}")
         print(f"[DEBUG] Filtering for sample ID: {sample_id}")
         sample_data = df[df["Purch.Req."].astype(str) == str(sample_id)]
@@ -241,8 +241,8 @@ def get_sample_data(sample_id):
         print(f"[DEBUG] Short texts count: {len(short_texts)}")
         pdf_folder = data_dir / str(sample_id)
         pdfs = []
-        if pdf_folder.exists() and pdf_folder.is_dir():
-            pdfs = sorted([f.name for f in pdf_folder.glob("*.PDF")])
+        if storage.exists(pdf_folder):
+            pdfs = sorted(storage.glob_files(pdf_folder, "*.PDF"))
             print(f"[DEBUG] Found {len(pdfs)} PDFs")
         else:
             print(f"[DEBUG] PDF folder not found: {pdf_folder}")
@@ -277,9 +277,9 @@ def get_sample_ids():
         # Invoicing: use filenames in data_dir
         if project_key == "invoicing":
             data_dir: Path = cfg["data_dir"]
-            if not data_dir or not data_dir.exists():
+            if not data_dir or not storage.exists(data_dir):
                 return jsonify({"error": err or "Data directory not found"}), 400
-            files = [p.name for p in data_dir.glob("*.pdf")] + [p.name for p in data_dir.glob("*.PDF")]
+            files = storage.glob_files(data_dir, "*.pdf") + storage.glob_files(data_dir, "*.PDF")
             seen = set()
             ids_sorted = []
             for name in sorted(files, key=lambda s: s.lower()):
@@ -293,11 +293,10 @@ def get_sample_ids():
         # Smart Judge: from final_outputs.json
         if project_key == "smartjudge":
             final_outputs_path: Path | None = cfg.get("final_outputs")
-            if not final_outputs_path or not final_outputs_path.exists():
+            if not final_outputs_path or not storage.exists(final_outputs_path):
                 return jsonify({"error": err or "Final outputs file not found"}), 400
             try:
-                with open(final_outputs_path, 'r', encoding='utf-8-sig') as f:
-                    data = json.load(f)
+                data = storage.read_json(final_outputs_path)
             except Exception as je:
                 return jsonify({"error": f"Failed to parse Final Outputs JSON: {je}"}), 500
             ids: list[str] = []
@@ -315,9 +314,9 @@ def get_sample_ids():
         # Prompt Enhancer: PNG filenames in data_dir
         if project_key == "promptenhancer":
             data_dir: Path = cfg.get("data_dir")
-            if not data_dir or not data_dir.exists():
+            if not data_dir or not storage.exists(data_dir):
                 return jsonify({"error": err or "Data directory not found"}), 400
-            files = [p.name for p in data_dir.glob("*.png")] + [p.name for p in data_dir.glob("*.PNG")]
+            files = storage.glob_files(data_dir, "*.png") + storage.glob_files(data_dir, "*.PNG")
             seen = set()
             ids_sorted = []
             for name in sorted(files, key=lambda s: s.lower()):
@@ -332,7 +331,7 @@ def get_sample_ids():
         if not valid:
             return jsonify({"error": err}), 400
         excel_path = cfg["excel_file"]
-        df = pd.read_excel(excel_path, usecols=["Purch.Req."])
+        df = storage.read_excel(excel_path, usecols=["Purch.Req."])
         ids = df["Purch.Req."].dropna().astype(str).str.strip().unique().tolist()
         try:
             ids_sorted = sorted(ids, key=lambda x: int(x))
@@ -357,7 +356,7 @@ def get_pdf(sample_id, filename):
         if project_key == "invoicing":
             # Files are flat under data_dir; prefer filename
             doc_path = data_dir / filename
-            if not doc_path.exists():
+            if not storage.exists(doc_path):
                 doc_path = data_dir / str(sample_id)
         elif project_key == "promptenhancer":
             # Flat files; serve PNG or image
@@ -365,16 +364,30 @@ def get_pdf(sample_id, filename):
         else:
             doc_path = data_dir / str(sample_id) / filename
 
-        if not doc_path.exists():
+        if not storage.exists(doc_path):
             return jsonify({"error": "Document not found"}), 404
 
+        # Get the file stream (faster for Azure) or path (for local)
+        file_stream = storage.get_file_stream(doc_path)
         ext = doc_path.suffix.lower()
-        if ext == ".pdf":
-            return send_file(doc_path, mimetype="application/pdf")
-        if ext in (".png", ".jpg", ".jpeg"):
-            mt = "image/png" if ext == ".png" else "image/jpeg"
-            return send_file(doc_path, mimetype=mt)
-        return send_file(doc_path)
+        
+        if file_stream:
+            # Azure mode - stream directly from memory
+            if ext == ".pdf":
+                return send_file(file_stream, mimetype="application/pdf", download_name=filename)
+            if ext in (".png", ".jpg", ".jpeg"):
+                mt = "image/png" if ext == ".png" else "image/jpeg"
+                return send_file(file_stream, mimetype=mt, download_name=filename)
+            return send_file(file_stream, download_name=filename)
+        else:
+            # Local mode - use file path
+            file_path = str(doc_path)
+            if ext == ".pdf":
+                return send_file(file_path, mimetype="application/pdf")
+            if ext in (".png", ".jpg", ".jpeg"):
+                mt = "image/png" if ext == ".png" else "image/jpeg"
+                return send_file(file_path, mimetype=mt)
+            return send_file(file_path)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -398,13 +411,12 @@ def get_final_outputs(sample_id):
             })
 
         final_outputs_path: Path | None = cfg.get("final_outputs")
-        if not final_outputs_path or not final_outputs_path.exists():
+        if not final_outputs_path or not storage.exists(final_outputs_path):
             print(f"[ERROR] Final outputs file not found at: {final_outputs_path}")
             return jsonify({"error": "Final outputs file not found"}), 404
 
         try:
-            with open(final_outputs_path, 'r', encoding='utf-8-sig') as f:
-                data = json.load(f)
+            data = storage.read_json(final_outputs_path)
         except Exception as je:
             print(f"[ERROR] Failed to parse Final Outputs JSON: {je}")
             return jsonify({"error": f"Failed to parse Final Outputs JSON: {je}"}), 500
