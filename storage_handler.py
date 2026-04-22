@@ -9,10 +9,6 @@ from typing import List, BinaryIO, Optional
 import tempfile
 from functools import lru_cache
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 # Check if Azure mode is enabled
 AZURE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 AZURE_CONTAINER_NAME = os.getenv("AZURE_CONTAINER_NAME", "use-cases")
