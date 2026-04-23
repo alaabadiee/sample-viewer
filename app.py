@@ -527,9 +527,9 @@ def list_documents():
         if project_key != "promptenhancer":
             return jsonify({"error": "Documents listing is only available for Prompt Enhancer"}), 400
         data_dir: Path = cfg.get("data_dir")
-        if not data_dir or not data_dir.exists():
+        if not data_dir or not storage.exists(data_dir):
             return jsonify({"error": err or "Data directory not found"}), 400
-        files = [p.name for p in data_dir.glob("*.png")] + [p.name for p in data_dir.glob("*.PNG")] + [p.name for p in data_dir.glob("*.jpg")] + [p.name for p in data_dir.glob("*.jpeg")] + [p.name for p in data_dir.glob("*.JPG")] + [p.name for p in data_dir.glob("*.JPEG")]
+        files = storage.glob_files(data_dir, "*.png") + storage.glob_files(data_dir, "*.PNG") + storage.glob_files(data_dir, "*.jpg") + storage.glob_files(data_dir, "*.jpeg") + storage.glob_files(data_dir, "*.JPG") + storage.glob_files(data_dir, "*.JPEG")
         # Unique and sorted case-insensitively
         seen = set()
         docs = []
