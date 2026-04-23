@@ -18,25 +18,21 @@ AUDIT_DIR = USE_CASES_DIR / "Audit"
 AUDIT_DATA_DIR = AUDIT_DIR / "data"
 AUDIT_EXCEL_FILE = AUDIT_DIR / "Metadata.xlsx"
 AUDIT_FINAL_OUTPUTS = AUDIT_DIR / "final_outputs.json"
-AUDIT_ORCHESTRATION_URL = os.getenv("AUDIT_ORCHESTRATION_URL")
 
 # Default configuration (Invoicing project)
 INVOICING_DIR = USE_CASES_DIR / "Invoicing"
 INVOICING_DATA_DIR = INVOICING_DIR / "data"
 INVOICING_EXCEL_FILE = INVOICING_DIR / "PO Database.xlsx"
 INVOICING_FINAL_OUTPUTS = INVOICING_DIR / "final_outputs.json"
-INVOICING_ORCHESTRATION_URL = os.getenv("INVOICING_ORCHESTRATION_URL")
 
 # Default configuration (Smart Judge project)
 SMART_JUDGE_DIR = USE_CASES_DIR / "Smart Judge"
 SMART_JUDGE_DATA_DIR = SMART_JUDGE_DIR / "data"
 SMART_JUDGE_FINAL_OUTPUTS = SMART_JUDGE_DIR / "final_outputs.json"
-SMART_JUDGE_ORCHESTRATION_URL = os.getenv("SMART_JUDGE_ORCHESTRATION_URL")
 
 # Default configuration (Prompt Enhancer project)
 PROMPT_ENHANCER_DIR = USE_CASES_DIR / "Prompt Enhancer"
 PROMPT_ENHANCER_DATA_DIR = PROMPT_ENHANCER_DIR / "data"
-PROMPT_ENHANCER_ORCHESTRATION_URL = os.getenv("PROMPT_ENHANCER_ORCHESTRATION_URL")
 
 # Project registry
 PROJECTS = {
@@ -45,28 +41,24 @@ PROJECTS = {
         "data_dir": AUDIT_DATA_DIR,
         "excel_file": AUDIT_EXCEL_FILE,
         "final_outputs": AUDIT_FINAL_OUTPUTS,
-        "orchestration_url": AUDIT_ORCHESTRATION_URL,
     },
     "invoicing": {
         "label": "Invoicing",
         "data_dir": INVOICING_DATA_DIR,
         "excel_file": INVOICING_EXCEL_FILE,
         "final_outputs": INVOICING_FINAL_OUTPUTS,
-        "orchestration_url": INVOICING_ORCHESTRATION_URL,
     },
     "smartjudge": {
         "label": "Smart Judge",
         "data_dir": SMART_JUDGE_DATA_DIR,
         "excel_file": None,
         "final_outputs": SMART_JUDGE_FINAL_OUTPUTS,
-        "orchestration_url": SMART_JUDGE_ORCHESTRATION_URL,
     },
     "promptenhancer": {
         "label": "Prompt Enhancer",
         "data_dir": PROMPT_ENHANCER_DATA_DIR,
         "excel_file": None,
         "final_outputs": None,
-        "orchestration_url": PROMPT_ENHANCER_ORCHESTRATION_URL,
     },
 }
 
@@ -520,7 +512,6 @@ def list_projects():
             "label": cfg.get("label", key.title()),
             "configured": valid,
             "error": err,
-            "orchestration": bool(cfg.get("orchestration_url")),
         })
     return jsonify({"projects": result})
 
@@ -551,32 +542,6 @@ def list_documents():
         return jsonify({"documents": docs, "count": len(docs), "project": project_key})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-@app.route("/orchestration")
-def orchestration_query():
-    """Redirect to orchestration using project query param."""
-    key = _get_project_key()
-    return orchestration(key)
-
-
-@app.route("/orchestration/<project_key>")
-def orchestration(project_key: str):
-    """Redirect to external orchestration URL if configured, else return a simple page."""
-    cfg = PROJECTS.get(project_key)
-    if not cfg:
-        return jsonify({"error": f"Unknown project '{project_key}'"}), 404
-    url = cfg.get("orchestration_url")
-    if url:
-        from flask import redirect
-        return redirect(url, code=302)
-    # Fallback simple page
-    label = cfg.get("label", project_key.title())
-    return (f"<html><body style='font-family:sans-serif;padding:1rem'>"
-            f"<h3>Orchestration not configured</h3>"
-            f"<p>No orchestration URL is configured for project '<strong>{label}</strong>'.</p>"
-            f"<p>Set environment variable <code>{project_key.upper()}_ORCHESTRATION_URL</code> and reload the app.</p>"
-            f"</body></html>")
 
 
 if __name__ == "__main__":

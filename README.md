@@ -57,11 +57,6 @@ Environment variables (optional):
 		```
 		set USE_CASES_DIR=C:\Users\a.badie\Downloads\Audit UI\Use Cases
 		```
-- `AUDIT_ORCHESTRATION_URL` — External URL to redirect for Audit orchestration.
-- `INVOICING_ORCHESTRATION_URL` — External URL to redirect for Invoicing orchestration.
-- `SMART_JUDGE_ORCHESTRATION_URL` — External URL to redirect for Smart Judge orchestration.
-
-If an orchestration URL is set, visiting `/orchestration` or `/orchestration/<project>` will redirect to it. Otherwise, a simple info page is shown.
 
 ## Selecting a project
 
@@ -106,9 +101,6 @@ All endpoints accept the optional `project` query param to select context.
 
 - `GET /api/projects`
 	- Lists available projects and whether required files are configured/present.
-
-- `GET /orchestration` and `GET /orchestration/<project>`
-	- Redirect to the project's orchestration URL if configured; otherwise show a help page.
 
 ## Validation rules per project
 

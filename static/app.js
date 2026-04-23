@@ -56,7 +56,6 @@ const zoomLevel = document.getElementById('zoomLevel');
 const prevPageBtn = document.getElementById('prevPage');
 const nextPageBtn = document.getElementById('nextPage');
 const pageIndicator = document.getElementById('pageIndicator');
-const orchLink = document.getElementById('orchLink');
 const rightPanelTitle = document.getElementById('rightPanelTitle');
 const itemsSection = document.getElementById('itemsSection');
 const metadataSection = document.getElementById('metadataSection');
@@ -72,7 +71,7 @@ const sampleSelectToggle = document.getElementById('sampleSelectToggle');
 const sampleSelectMenu = document.getElementById('sampleSelectMenu');
 const sampleSelectList = document.getElementById('sampleSelectList');
 
-// Hide the counter pill next to Open Orchestration globally
+// Hide the counter pill globally
 if (itemCounter) {
     itemCounter.style.display = 'none';
 }
@@ -331,11 +330,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Do not auto-select a project; require user choice
     const projectKey = projectSelect ? (projectSelect.value || '') : '';
-        if (orchLink) {
-            orchLink.classList.add('disabled');
-            orchLink.href = '#';
-            orchLink.title = 'Select a use case to open orchestration';
-        }
         // If no project chosen yet, leave sample select with its placeholder
         if (!projectKey) {
             sampleSelect.innerHTML = '';
@@ -352,7 +346,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const itemsSection = document.getElementById('itemsSection');
                 const metadataSection = document.getElementById('metadataSection');
                 const warningsSection = document.getElementById('warningsSection');
-                const orchLink = document.getElementById('orchLink');
                 const dataSection = document.querySelector('.data-section');
                 // Hide counters
                 if (pdfCounter) { pdfCounter.textContent = ''; pdfCounter.style.display = 'none'; }
@@ -361,12 +354,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (metadataSection) metadataSection.style.display = 'none';
                 if (warningsSection) warningsSection.style.display = 'none';
                 if (dataSection) dataSection.style.display = 'none';
-                // Disable orchestration link
-                if (orchLink) {
-                    orchLink.classList.add('disabled');
-                    orchLink.href = '#';
-                    orchLink.title = '';
-                }
                 // Hide sample selector entirely
                 if (sampleSelectWrapper) sampleSelectWrapper.style.display = 'none';
                 // Load documents list and render images
@@ -391,12 +378,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 // Stop normal flow for sample IDs
                 return;
-            }
-            // Enable orchestration link for selected project
-            if (orchLink) {
-                orchLink.classList.remove('disabled');
-                orchLink.href = `/orchestration/${encodeURIComponent(projectKey)}`;
-                orchLink.title = `Open orchestration for ${projectKey}`;
             }
             // Ensure sample selector and right panel visible for non-Prompt Enhancer
             if (sampleSelectWrapper) sampleSelectWrapper.style.display = '';
@@ -520,18 +501,6 @@ document.addEventListener('click', (e) => {
 if (projectSelect) {
     projectSelect.addEventListener('change', async () => {
     const projectKey = projectSelect.value;
-        // Update orchestration link
-        if (orchLink) {
-            if (projectKey) {
-                orchLink.classList.remove('disabled');
-                orchLink.href = `/orchestration/${encodeURIComponent(projectKey)}`;
-                orchLink.title = `Open orchestration for ${projectKey}`;
-            } else {
-                orchLink.classList.add('disabled');
-                orchLink.href = '#';
-                orchLink.title = 'Select a use case to open orchestration';
-            }
-        }
     // Clear any previously stored selection; require explicit choice each time
     // localStorage.setItem('selectedProject', projectKey);
         // Clear sample select
@@ -559,12 +528,6 @@ if (projectSelect) {
                 if (metadataSection) metadataSection.style.display = 'none';
                 if (warningsSection) warningsSection.style.display = 'none';
                 if (dataSection) dataSection.style.display = 'none';
-                // Disable orchestration link
-                if (orchLink) {
-                    orchLink.classList.add('disabled');
-                    orchLink.href = '#';
-                    orchLink.title = '';
-                }
                 // Load documents
                 try {
                     const docResp = await fetch(`/api/documents?project=${encodeURIComponent(projectKey)}`);
