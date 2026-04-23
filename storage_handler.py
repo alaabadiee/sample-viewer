@@ -60,6 +60,15 @@ def _list_directory_blobs(dir_path: str) -> tuple:
         return tuple()
 
 
+# Cache for file contents (reduces repeated downloads of PDFs/images)
+@lru_cache(maxsize=50)  # Cache up to 50 files (adjust based on memory constraints)
+def _get_cached_file_bytes(blob_path: str) -> bytes:
+    """Download and cache file bytes from Azure. Returns immutable bytes for caching."""
+    print(f"[FILE CACHE] Downloading: {blob_path}")
+    blob_client = container_client.get_blob_client(blob_path)
+    return blob_client.download_blob().readall()
+
+
 def exists(path: Path) -> bool:
     """Check if a file or directory exists."""
     if not USE_AZURE:
@@ -193,22 +202,22 @@ def read_json(path: Path):
 
 
 def get_file_stream(path: Path):
-    """Get file as BytesIO stream for send_file. Much faster than downloading to temp."""
+    """Get file as BytesIO stream for send_file. Uses cache to avoid repeated downloads."""
     if not USE_AZURE:
         return None  # Signal to use file path instead
     
-    # For Azure, stream directly from blob
+    # For Azure, use cached bytes and create fresh stream
     blob_path = normalize_path(str(path).replace(str(get_base_dir()), ""))
     # Clean up the path - remove "Use Cases" prefix if present
     if blob_path.startswith("Use Cases/"):
         blob_path = blob_path[10:]  # Remove "Use Cases/"
     
-    print(f"[DEBUG] Streaming file from: {blob_path}")
-    blob_client = container_client.get_blob_client(blob_path)
+    # Get cached bytes (or download if not cached)
+    file_bytes = _get_cached_file_bytes(blob_path)
+    print(f"[FILE CACHE] Serving from cache: {blob_path} ({len(file_bytes)} bytes)")
     
-    # Download to memory stream (much faster than temp file)
-    stream = io.BytesIO()
-    blob_client.download_blob().readinto(stream)
+    # Create fresh BytesIO stream from cached bytes
+    stream = io.BytesIO(file_bytes)
     stream.seek(0)
     
     return stream

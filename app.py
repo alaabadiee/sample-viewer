@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from functools import lru_cache
 
 import pandas as pd
 from flask import Flask, jsonify, render_template, send_file, request
@@ -7,6 +8,10 @@ import json
 import storage_handler as storage
 
 app = Flask(__name__)
+
+# In-memory cache for project data to avoid repeated downloads
+_EXCEL_CACHE = {}
+_JSON_CACHE = {}
 
 # Resolve the base "Use Cases" directory. Allow override via env var USE_CASES_DIR.
 # Defaults to a folder named "Use Cases" next to this app.py file for portability.
@@ -67,6 +72,28 @@ def _get_project_key():
     """Resolve project from query param."""
     key = (request.args.get("project") or "").strip().lower()
     return key
+
+
+def _get_cached_excel(project_key: str, excel_path: Path):
+    """Get cached Excel DataFrame or load and cache it."""
+    cache_key = f"{project_key}:{excel_path}"
+    if cache_key not in _EXCEL_CACHE:
+        print(f"[CACHE] Loading Excel for {project_key}: {excel_path}")
+        _EXCEL_CACHE[cache_key] = storage.read_excel_custom(excel_path)
+    else:
+        print(f"[CACHE] Using cached Excel for {project_key}")
+    return _EXCEL_CACHE[cache_key]
+
+
+def _get_cached_json(project_key: str, json_path: Path):
+    """Get cached JSON data or load and cache it."""
+    cache_key = f"{project_key}:{json_path}"
+    if cache_key not in _JSON_CACHE:
+        print(f"[CACHE] Loading JSON for {project_key}: {json_path}")
+        _JSON_CACHE[cache_key] = storage.read_json(json_path)
+    else:
+        print(f"[CACHE] Using cached JSON for {project_key}")
+    return _JSON_CACHE[cache_key]
 
 
 def _get_project_config(project_key: str):
@@ -143,7 +170,7 @@ def get_sample_data(sample_id):
             excel_file: Path | None = cfg.get("excel_file")
             if excel_file and storage.exists(excel_file):
                 try:
-                    df = storage.read_excel_custom(excel_file)
+                    df = _get_cached_excel(project_key, excel_file)
                     # Normalize columns; support slight variations
                     cols = {c.strip().lower(): c for c in df.columns if isinstance(c, str)}
                     sample_col = cols.get("sample id")
@@ -221,7 +248,7 @@ def get_sample_data(sample_id):
         # Default (Audit)
         excel_path = cfg["excel_file"]
         print(f"[DEBUG] Reading Excel file: {excel_path}")
-        df = storage.read_excel_custom(excel_path)
+        df = _get_cached_excel(project_key, excel_path)
         print(f"[DEBUG] Excel loaded. Shape: {df.shape}")
         print(f"[DEBUG] Filtering for sample ID: {sample_id}")
         sample_data = df[df["Purch.Req."].astype(str) == str(sample_id)]
@@ -288,7 +315,7 @@ def get_sample_ids():
             if not final_outputs_path or not storage.exists(final_outputs_path):
                 return jsonify({"error": err or "Final outputs file not found"}), 400
             try:
-                data = storage.read_json(final_outputs_path)
+                data = _get_cached_json(project_key, final_outputs_path)
             except Exception as je:
                 return jsonify({"error": f"Failed to parse Final Outputs JSON: {je}"}), 500
             ids: list[str] = []
@@ -323,8 +350,12 @@ def get_sample_ids():
         if not valid:
             return jsonify({"error": err}), 400
         excel_path = cfg["excel_file"]
-        df = storage.read_excel(excel_path, usecols=["Purch.Req."])
-        ids = df["Purch.Req."].dropna().astype(str).str.strip().unique().tolist()
+        # Use full Excel cache and select columns after
+        df = _get_cached_excel(project_key, excel_path)
+        if "Purch.Req." in df.columns:
+            ids = df["Purch.Req."].dropna().astype(str).str.strip().unique().tolist()
+        else:
+            ids = []
         try:
             ids_sorted = sorted(ids, key=lambda x: int(x))
         except Exception:
@@ -408,7 +439,7 @@ def get_final_outputs(sample_id):
             return jsonify({"error": "Final outputs file not found"}), 404
 
         try:
-            data = storage.read_json(final_outputs_path)
+            data = _get_cached_json(project_key, final_outputs_path)
         except Exception as je:
             print(f"[ERROR] Failed to parse Final Outputs JSON: {je}")
             return jsonify({"error": f"Failed to parse Final Outputs JSON: {je}"}), 500
