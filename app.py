@@ -512,13 +512,16 @@ def get_metadata(sample_id: str):
         sample_dir = data_dir / str(sample_id)
         meta_file = sample_dir / "metadata.json"
         print(f"[DEBUG] Metadata lookup for Sample ID: {sample_id} in {meta_file}")
-        if not sample_dir.exists() or not sample_dir.is_dir():
+        
+        # Use storage handler for Azure compatibility
+        if not storage.exists(sample_dir):
             return jsonify({"error": f"Sample folder not found: {sample_dir}"}), 404
-        if not meta_file.exists():
+        if not storage.exists(meta_file) or not storage.is_file(meta_file):
             return jsonify({"error": f"metadata.json not found in {sample_dir}"}), 404
+        
         try:
-            with open(meta_file, 'r', encoding='utf-8') as f:
-                metadata = json.load(f)
+            # Use cache for metadata to avoid repeated downloads
+            metadata = _get_cached_json(project_key, meta_file)
             print(f"[DEBUG] Metadata loaded for Sample ID: {sample_id} with data {metadata}")
         except Exception as fe:
             return jsonify({"error": f"Failed to read metadata: {fe}"}), 500
