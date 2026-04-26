@@ -3,6 +3,7 @@ from pathlib import Path
 from functools import lru_cache
 
 import pandas as pd
+import numpy as np
 from flask import Flask, jsonify, render_template, send_file, request
 import json
 import storage_handler as storage
@@ -13,9 +14,6 @@ app = Flask(__name__)
 _EXCEL_CACHE = {}
 _JSON_CACHE = {}
 
-# Resolve the base "Use Cases" directory. Allow override via env var USE_CASES_DIR.
-# Defaults to a folder named "Use Cases" next to this app.py file for portability.
-# When using Azure, this returns a virtual path.
 USE_CASES_DIR = storage.get_base_dir()
 
 # Default configuration (Audit project)
@@ -34,10 +32,21 @@ INVOICING_FINAL_OUTPUTS = INVOICING_DIR / "final_outputs.json"
 SMART_JUDGE_DIR = USE_CASES_DIR / "Smart Judge"
 SMART_JUDGE_DATA_DIR = SMART_JUDGE_DIR / "data"
 SMART_JUDGE_FINAL_OUTPUTS = SMART_JUDGE_DIR / "final_outputs.json"
+SMART_JUDGE_METADATA_FILE = SMART_JUDGE_DIR / "metadata.json"
 
 # Default configuration (Prompt Enhancer project)
 PROMPT_ENHANCER_DIR = USE_CASES_DIR / "Prompt Enhancer"
 PROMPT_ENHANCER_DATA_DIR = PROMPT_ENHANCER_DIR / "data"
+
+# Default configuration (ADIO project)
+ADIO_DIR = USE_CASES_DIR / "ADIO"
+ADIO_DATA_DIR = ADIO_DIR / "data"
+ADIO_EXCEL_FILE = ADIO_DIR / "company_info.xlsx"
+
+# Default configuration (Emirates NBD project)
+EMIRATES_NBD_DIR = USE_CASES_DIR / "Emirates NBD"
+EMIRATES_NBD_DATA_DIR = EMIRATES_NBD_DIR / "data"
+EMIRATES_NBD_EXCEL_FILE = EMIRATES_NBD_DIR / "invoice_data.xlsx"
 
 # Project registry
 PROJECTS = {
@@ -58,11 +67,24 @@ PROJECTS = {
         "data_dir": SMART_JUDGE_DATA_DIR,
         "excel_file": None,
         "final_outputs": SMART_JUDGE_FINAL_OUTPUTS,
+        "metadata_file": SMART_JUDGE_METADATA_FILE,
     },
     "promptenhancer": {
         "label": "Prompt Enhancer",
         "data_dir": PROMPT_ENHANCER_DATA_DIR,
         "excel_file": None,
+        "final_outputs": None,
+    },
+    "adio": {
+        "label": "ADIO",
+        "data_dir": ADIO_DATA_DIR,
+        "excel_file": ADIO_EXCEL_FILE,
+        "final_outputs": None,
+    },
+    "emiratesnbd": {
+        "label": "Emirates NBD",
+        "data_dir": EMIRATES_NBD_DATA_DIR,
+        "excel_file": EMIRATES_NBD_EXCEL_FILE,
         "final_outputs": None,
     },
 }
@@ -117,15 +139,30 @@ def _get_project_config(project_key: str):
         if not data_dir or not storage.exists(data_dir):
             missing.append("data_dir")
     elif project_key == "smartjudge":
-        # Final outputs required for sample IDs; data_dir required for serving PDFs
+        # Final outputs and metadata file required for sample IDs; data_dir required for serving PDFs
         if not final_outputs or not storage.exists(Path(final_outputs)):
             missing.append("final_outputs")
         if not data_dir or not storage.exists(data_dir):
             missing.append("data_dir")
+        metadata_file: Path | None = cfg.get("metadata_file")
+        if not metadata_file or not storage.exists(Path(metadata_file)):
+            missing.append("metadata_file")
     elif project_key == "promptenhancer":
         # Only data_dir required; images (PNGs) only
         if not data_dir or not storage.exists(data_dir):
             missing.append("data_dir")
+    elif project_key == "adio":
+        # Data dir and Excel file required for company info
+        if not data_dir or not storage.exists(data_dir):
+            missing.append("data_dir")
+        if not excel_file or not storage.exists(Path(excel_file)):
+            missing.append("excel_file")
+    elif project_key == "emiratesnbd":
+        # Data dir and Excel file required for invoice data
+        if not data_dir or not storage.exists(data_dir):
+            missing.append("data_dir")
+        if not excel_file or not storage.exists(Path(excel_file)):
+            missing.append("excel_file")
     else:
         # Default strict
         if not data_dir or not storage.exists(data_dir):
@@ -153,8 +190,8 @@ def get_sample_data(sample_id):
         if not cfg:
             return jsonify({"error": err}), 400
 
-        # For Invoicing, Smart Judge, and Prompt Enhancer, validation is relaxed per project rules
-        if project_key not in ("invoicing", "smartjudge", "promptenhancer") and not valid:
+        # For Invoicing, Smart Judge, Prompt Enhancer, and Emirates NBD, validation is relaxed per project rules
+        if project_key not in ("invoicing", "smartjudge", "promptenhancer", "emiratesnbd") and not valid:
             return jsonify({"error": err}), 400
 
         data_dir: Path = cfg.get("data_dir") if cfg else None
@@ -243,6 +280,64 @@ def get_sample_data(sample_id):
                 "project": project_key,
             }
             print(f"[DEBUG] Returning smartjudge result: {result['pdf_count']} PDFs, {result['text_count']} items")
+            return jsonify(result)
+
+        elif project_key == "adio":
+            # ADIO: sample IDs are folder names; PDFs live under data/<sample_id>/; no items
+            short_texts: list[str] = []
+            pdf_folder = data_dir / str(sample_id)
+            pdfs: list[str] = []
+            if storage.exists(pdf_folder):
+                files = storage.glob_files(pdf_folder, "*.pdf") + storage.glob_files(pdf_folder, "*.PDF")
+                # Deduplicate case-insensitively and sort by lowercase for stable order
+                seen = set()
+                for name in sorted(files, key=lambda s: s.lower()):
+                    low = name.lower()
+                    if low in seen:
+                        continue
+                    seen.add(low)
+                    pdfs.append(name)
+                print(f"[DEBUG] ADIO found {len(pdfs)} unique PDFs in {pdf_folder}")
+            else:
+                print(f"[DEBUG] ADIO PDF folder not found: {pdf_folder}")
+            result = {
+                "sample_id": sample_id,
+                "short_texts": short_texts,
+                "pdfs": pdfs,
+                "pdf_count": len(pdfs),
+                "text_count": len(short_texts),
+                "project": project_key,
+            }
+            print(f"[DEBUG] Returning adio result: {result['pdf_count']} PDFs, {result['text_count']} items")
+            return jsonify(result)
+
+        elif project_key == "emiratesnbd":
+            # Emirates NBD: sample IDs are folder names; PDFs live under data/<sample_id>/; no items
+            short_texts: list[str] = []
+            pdf_folder = data_dir / str(sample_id)
+            pdfs: list[str] = []
+            if storage.exists(pdf_folder):
+                files = storage.glob_files(pdf_folder, "*.pdf") + storage.glob_files(pdf_folder, "*.PDF")
+                # Deduplicate case-insensitively and sort by lowercase for stable order
+                seen = set()
+                for name in sorted(files, key=lambda s: s.lower()):
+                    low = name.lower()
+                    if low in seen:
+                        continue
+                    seen.add(low)
+                    pdfs.append(name)
+                print(f"[DEBUG] Emirates NBD found {len(pdfs)} unique PDFs in {pdf_folder}")
+            else:
+                print(f"[DEBUG] Emirates NBD PDF folder not found: {pdf_folder}")
+            result = {
+                "sample_id": sample_id,
+                "short_texts": short_texts,
+                "pdfs": pdfs,
+                "pdf_count": len(pdfs),
+                "text_count": len(short_texts),
+                "project": project_key,
+            }
+            print(f"[DEBUG] Returning emiratesnbd result: {result['pdf_count']} PDFs, {result['text_count']} items")
             return jsonify(result)
 
         # Default (Audit)
@@ -346,6 +441,36 @@ def get_sample_ids():
                 ids_sorted.append(name)
             return jsonify({"ids": ids_sorted, "count": len(ids_sorted), "project": project_key})
 
+        # ADIO: folder names in data_dir
+        if project_key == "adio":
+            data_dir: Path = cfg.get("data_dir")
+            if not data_dir or not storage.exists(data_dir):
+                return jsonify({"error": err or "Data directory not found"}), 400
+            # Get all subdirectories in the data folder
+            from pathlib import Path
+            ids = []
+            for item in storage.list_dir(data_dir):
+                item_path = data_dir / item
+                if storage.is_dir(item_path):
+                    ids.append(item)
+            ids_sorted = sorted(ids, key=lambda s: (len(s), s))
+            return jsonify({"ids": ids_sorted, "count": len(ids_sorted), "project": project_key})
+
+        # Emirates NBD: folder names in data_dir
+        if project_key == "emiratesnbd":
+            data_dir: Path = cfg.get("data_dir")
+            if not data_dir or not storage.exists(data_dir):
+                return jsonify({"error": err or "Data directory not found"}), 400
+            # Get all subdirectories in the data folder
+            from pathlib import Path
+            ids = []
+            for item in storage.list_dir(data_dir):
+                item_path = data_dir / item
+                if storage.is_dir(item_path):
+                    ids.append(item)
+            ids_sorted = sorted(ids, key=lambda s: (len(s), s))
+            return jsonify({"ids": ids_sorted, "count": len(ids_sorted), "project": project_key})
+
         # Default (Audit): from Excel
         if not valid:
             return jsonify({"error": err}), 400
@@ -403,8 +528,9 @@ def get_pdf(sample_id, filename):
                 return send_file(file_stream, mimetype=mt, download_name=filename)
             return send_file(file_stream, download_name=filename)
         else:
-            # Local mode - use file path
-            file_path = str(doc_path)
+            # Local mode - use file path (either local storage or Azure fallback)
+            local_path = storage.get_local_path(doc_path)
+            file_path = str(local_path)
             if ext == ".pdf":
                 return send_file(file_path, mimetype="application/pdf")
             if ext in (".png", ".jpg", ".jpeg"):
@@ -498,7 +624,7 @@ def get_final_outputs(sample_id):
 
 @app.route("/api/metadata/<sample_id>")
 def get_metadata(sample_id: str):
-    """Return metadata for Smart Judge from metadata.json under the sample folder."""
+    """Return metadata for Smart Judge from centralized metadata.json file."""
     try:
         project_key = _get_project_key()
         cfg, valid, err = _get_project_config(project_key)
@@ -508,24 +634,44 @@ def get_metadata(sample_id: str):
             return jsonify({"error": "Metadata is available only for Smart Judge"}), 400
         if not valid:
             return jsonify({"error": err}), 400
-        data_dir: Path = cfg["data_dir"]
-        sample_dir = data_dir / str(sample_id)
-        meta_file = sample_dir / "metadata.json"
-        print(f"[DEBUG] Metadata lookup for Sample ID: {sample_id} in {meta_file}")
         
-        # Use storage handler for Azure compatibility
-        if not storage.exists(sample_dir):
-            return jsonify({"error": f"Sample folder not found: {sample_dir}"}), 404
-        if not storage.exists(meta_file) or not storage.is_file(meta_file):
-            return jsonify({"error": f"metadata.json not found in {sample_dir}"}), 404
+        metadata_file: Path | None = cfg.get("metadata_file")
+        print(f"[DEBUG] Metadata lookup for Sample ID: {sample_id} from {metadata_file}")
+        
+        # Check if metadata file exists
+        if not metadata_file or not storage.exists(metadata_file):
+            return jsonify({"error": f"Metadata file not found"}), 404
         
         try:
-            # Use cache for metadata to avoid repeated downloads
-            metadata = _get_cached_json(project_key, meta_file)
-            print(f"[DEBUG] Metadata loaded for Sample ID: {sample_id} with data {metadata}")
+            # Read the metadata file (should be an array or object with sample data)
+            all_metadata = _get_cached_json(project_key, metadata_file)
+            print(f"[DEBUG] Metadata file loaded")
+            
+            # Find metadata for this sample_id
+            metadata = None
+            sample_norm = str(sample_id).strip()
+            
+            if isinstance(all_metadata, list):
+                # If it's an array, find the entry with matching sample_id
+                for entry in all_metadata:
+                    if isinstance(entry, dict):
+                        entry_id = entry.get('sample_id')
+                        if entry_id and str(entry_id).strip() == sample_norm:
+                            metadata = entry
+                            break
+            elif isinstance(all_metadata, dict):
+                # If it's an object with sample_id keys
+                metadata = all_metadata.get(sample_norm) or all_metadata.get(sample_id)
+            
+            if metadata is None:
+                return jsonify({"error": f"No metadata found for Sample ID {sample_id}"}), 404
+            
+            print(f"[DEBUG] Metadata loaded for Sample ID: {sample_id}")
+            
         except Exception as fe:
             return jsonify({"error": f"Failed to read metadata: {fe}"}), 500
-        # Return as-is; could be an object or array
+        
+        # Return the metadata for this sample
         return jsonify({
             "sample_id": sample_id,
             "metadata": metadata,
@@ -534,6 +680,207 @@ def get_metadata(sample_id: str):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/companyInfo/<sample_id>")
+def get_company_info(sample_id: str):
+    """Return company information for ADIO from centralized Excel file's 'company_info.xlsx'."""
+    try:
+        project_key = _get_project_key()
+        cfg, valid, err = _get_project_config(project_key)
+        if not cfg:
+            return jsonify({"error": err}), 400
+        if project_key != "adio":
+            return jsonify({"error": "Company info is available only for ADIO"}), 400
+        
+        excel_file: Path | None = cfg.get("excel_file")
+        print(f"[DEBUG] Company info lookup for Sample ID: {sample_id} from {excel_file}")
+        
+        # Check if Excel file exists
+        if not excel_file or not storage.exists(excel_file):
+            return jsonify({"error": f"Company info Excel file not found"}), 404
+        
+        try:
+            # Read the Excel file
+            # Use cache for company info to avoid repeated downloads
+            df_all = _get_cached_excel(project_key, excel_file)
+            print(f"[DEBUG] Company info Excel loaded, shape: {df_all.shape}")
+            
+            # Normalize column names for comparison
+            cols = {c.strip().lower(): c for c in df_all.columns if isinstance(c, str)}
+            
+            # Try to find sample_id column
+            sample_col = None
+            for candidate in ['sample_id', 'sample id', 'sampleid', 'id', 'sample']:
+                if candidate in cols:
+                    sample_col = cols[candidate]
+                    break
+            
+            if sample_col is None:
+                return jsonify({"error": f"Could not identify sample_id column in the Excel file"}), 404
+            
+            # Find the row matching the sample_id
+            sample_norm = str(sample_id).strip()
+            matches = df_all[df_all[sample_col].astype(str).str.strip() == sample_norm]
+            
+            if matches.empty:
+                return jsonify({"error": f"Sample ID {sample_id} not found in company info Excel file"}), 404
+            
+            # Get the first matching row and convert to dict
+            row = matches.iloc[0]
+            
+            # Build company info dict with expected fields
+            company_info = {}
+            for col in df_all.columns:
+                col_lower = col.strip().lower()
+                # Skip the sample_id column in the output
+                if col_lower not in ['sample_id', 'sample id', 'sampleid', 'id', 'sample']:
+                    value = row[col]
+                    # Convert NaN to None for JSON serialization
+                    if pd.isna(value):
+                        company_info[col] = None
+                    # Format dates as short format (MM/DD/YYYY)
+                    elif isinstance(value, pd.Timestamp):
+                        company_info[col] = value.strftime('%m/%d/%Y')
+                    else:
+                        company_info[col] = value
+            
+            print(f"[DEBUG] Company info loaded for Sample ID: {sample_id}")
+            
+        except Exception as fe:
+            return jsonify({"error": f"Failed to read company info: {fe}"}), 500
+        
+        # Return the company info data
+        return jsonify({
+            "sample_id": sample_id,
+            "data": company_info,
+            "project": project_key,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/invoiceData/<sample_id>")
+def get_invoice_data(sample_id: str):
+    """Return invoice data for Emirates NBD from centralized Excel file's 'payment sheet'."""
+    try:
+        project_key = _get_project_key()
+        cfg, valid, err = _get_project_config(project_key)
+        if not cfg:
+            return jsonify({"error": err}), 400
+        if project_key != "emiratesnbd":
+            return jsonify({"error": "Invoice data is available only for Emirates NBD"}), 400
+        
+        excel_file: Path | None = cfg.get("excel_file")
+        print(f"[DEBUG] Invoice data lookup for Sample ID: {sample_id} from {excel_file}")
+        
+        # Check if Excel file exists
+        if not excel_file or not storage.exists(excel_file):
+            return jsonify({"error": f"Invoice data Excel file not found"}), 404
+        
+        try:
+            # Read the Excel file with the specific sheet name "payment sheet"
+            # Use cache for invoice data to avoid repeated downloads
+            cache_key = f"{project_key}:{excel_file}:payment_sheet"
+            if cache_key not in _EXCEL_CACHE:
+                print(f"[CACHE] Loading Excel sheet 'payment sheet' for {project_key}: {excel_file}")
+                df_all = storage.read_excel_custom(excel_file, sheet_name="payment sheet")
+                _EXCEL_CACHE[cache_key] = df_all
+            else:
+                print(f"[CACHE] Using cached Excel sheet for {project_key}")
+                df_all = _EXCEL_CACHE[cache_key]
+            
+            print(f"[DEBUG] Invoice Excel 'payment sheet' loaded, shape: {df_all.shape}")
+            
+            # Try to find which column contains the sample ID
+            # Common column names to check (case-insensitive)
+            sample_id_columns = ['sample_id', 'sample id', 'sampleid', 'id', 'invoice_id', 'invoice id', 'invoiceid']
+            
+            # Normalize column names for comparison
+            cols = {c.strip().lower(): c for c in df_all.columns if isinstance(c, str)}
+            sample_col = None
+            
+            # Try to find a matching column
+            for candidate in sample_id_columns:
+                if candidate in cols:
+                    sample_col = cols[candidate]
+                    break
+            
+            # If no standard column found, try to find a column where the sample_id value exists
+            if sample_col is None:
+                sample_norm = str(sample_id).strip()
+                for col_name in df_all.columns:
+                    if df_all[col_name].astype(str).str.strip().eq(sample_norm).any():
+                        sample_col = col_name
+                        print(f"[DEBUG] Found sample ID in column: {sample_col}")
+                        break
+            
+            if sample_col is None:
+                return jsonify({"error": f"Could not identify sample ID column in the Excel file"}), 404
+            
+            # Filter data for the specific sample_id
+            sample_norm = str(sample_id).strip()
+            df_filtered = df_all[df_all[sample_col].astype(str).str.strip() == sample_norm]
+            
+            print(f"[DEBUG] Filtered {len(df_filtered)} rows for Sample ID: {sample_id}")
+            
+            if df_filtered.empty:
+                return jsonify({"error": f"No data found for Sample ID: {sample_id}"}), 404
+            
+            # Get the first row as a dictionary (for key-value display)
+            # Replace NaN values with None for proper JSON serialization
+            first_row_series = df_filtered.iloc[0]
+            first_row = {}
+            
+            # Format values, especially dates, to be more readable and JSON serializable
+            for key in first_row_series.index:
+                value = first_row_series[key]
+                
+                # Check if value is NaN/None
+                if pd.isna(value):
+                    first_row[key] = None
+                # Check if value is a datetime type (pandas Timestamp)
+                elif isinstance(value, pd.Timestamp):
+                    # Format as short date format (MM/DD/YYYY)
+                    first_row[key] = value.strftime('%m/%d/%Y')
+                # Convert numpy/pandas numeric types to Python native types
+                elif isinstance(value, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+                    first_row[key] = int(value)
+                elif isinstance(value, (np.floating, np.float64, np.float32)):
+                    first_row[key] = float(value)
+                elif isinstance(value, np.bool_):
+                    first_row[key] = bool(value)
+                # Handle other numpy types with .item() method
+                elif hasattr(value, 'item'):
+                    try:
+                        first_row[key] = value.item()
+                    except (ValueError, TypeError, AttributeError):
+                        first_row[key] = str(value)
+                else:
+                    # Regular Python types (str, int, float, bool) pass through
+                    first_row[key] = value
+            
+            # Remove the sample ID column from the data
+            if sample_col in first_row:
+                del first_row[sample_col]
+            
+            # Get column names in order (excluding sample ID column)
+            columns_ordered = [col for col in df_filtered.columns if col != sample_col]
+            
+            return jsonify({
+                "sample_id": sample_id,
+                "data": first_row,
+                "columns": columns_ordered,
+                "project": project_key,
+            })
+        except Exception as fe:
+            print(f"[ERROR] Failed to read invoice Excel: {fe}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({"error": f"Failed to read invoice data: {fe}"}), 500
+        
+    except Exception as e:
+        print(f"[ERROR] Exception in get_invoice_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/projects")
 def list_projects():

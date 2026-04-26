@@ -35,6 +35,22 @@ def normalize_path(path: str) -> str:
     return path.replace("\\", "/").lstrip("/")
 
 
+def get_local_base_dir() -> Path:
+    """Get local base directory for fallback."""
+    return Path(os.getenv("USE_CASES_DIR") or (Path(__file__).resolve().parent / "Use Cases")).resolve()
+
+
+def get_local_path(virtual_path: Path) -> Path:
+    """Convert virtual path to local path for fallback."""
+    if not USE_AZURE:
+        return virtual_path
+    # Replace virtual "Use Cases" with actual local path
+    path_str = str(virtual_path)
+    if path_str.startswith("Use Cases"):
+        return get_local_base_dir() / path_str[10:]  # Remove "Use Cases/" or "Use Cases\\"
+    return get_local_base_dir() / path_str
+
+
 # Cache for blob existence checks (reduces API calls)
 @lru_cache(maxsize=1000)
 def _check_blob_exists(blob_path: str) -> bool:
@@ -70,7 +86,7 @@ def _get_cached_file_bytes(blob_path: str) -> bytes:
 
 
 def exists(path: Path) -> bool:
-    """Check if a file or directory exists."""
+    """Check if a file or directory exists. Fallback to local if not in Azure."""
     if not USE_AZURE:
         return path.exists()
     
@@ -90,11 +106,16 @@ def exists(path: Path) -> bool:
     # Check if it's a directory (has blobs with this prefix)
     dir_path = blob_path if blob_path.endswith("/") else blob_path + "/"
     blobs = _list_directory_blobs(dir_path)
-    return len(blobs) > 0
+    if len(blobs) > 0:
+        return True
+    
+    # Fallback to local if not found in Azure
+    local_path = get_local_path(path)
+    return local_path.exists()
 
 
 def is_file(path: Path) -> bool:
-    """Check if path is a file (not directory)."""
+    """Check if path is a file (not directory). Fallback to local if not in Azure."""
     if not USE_AZURE:
         return path.is_file()
     
@@ -105,11 +126,74 @@ def is_file(path: Path) -> bool:
         blob_path = blob_path[10:]  # Remove "Use Cases/"
     
     # Use cached check
-    return _check_blob_exists(blob_path)
+    if _check_blob_exists(blob_path):
+        return True
+    
+    # Fallback to local
+    local_path = get_local_path(path)
+    return local_path.is_file()
+
+
+def is_dir(path: Path) -> bool:
+    """Check if path is a directory. Fallback to local if not in Azure."""
+    if not USE_AZURE:
+        return path.is_dir()
+    
+    # In Azure, check if it's a directory (has blobs with this prefix)
+    blob_path = normalize_path(str(path).replace(str(get_base_dir()), ""))
+    # Clean up the path - remove "Use Cases" prefix if present
+    if blob_path.startswith("Use Cases/"):
+        blob_path = blob_path[10:]  # Remove "Use Cases/"
+    
+    # Check if it's a directory (has blobs with this prefix)
+    dir_path = blob_path if blob_path.endswith("/") else blob_path + "/"
+    blobs = _list_directory_blobs(dir_path)
+    if len(blobs) > 0:
+        return True
+    
+    # Fallback to local
+    local_path = get_local_path(path)
+    return local_path.is_dir()
+
+
+def list_dir(path: Path) -> List[str]:
+    """List all files and directories in a directory. Fallback to local if not in Azure."""
+    if not USE_AZURE:
+        return [f.name for f in path.iterdir()]
+    
+    # For Azure, list all items (files and virtual directories) in the path
+    dir_path = normalize_path(str(path).replace(str(get_base_dir()), ""))
+    
+    # Clean up the path - remove "Use Cases" prefix if present
+    if dir_path.startswith("Use Cases/"):
+        dir_path = dir_path[10:]  # Remove "Use Cases/"
+    
+    if dir_path and not dir_path.endswith("/"):
+        dir_path += "/"
+    
+    # Use cached directory listing
+    blobs = _list_directory_blobs(dir_path)
+    
+    # Extract unique immediate children (files and directories)
+    children = set()
+    for blob_name in blobs:
+        relative = blob_name[len(dir_path):]
+        if relative:
+            # Get the first component (file or directory name)
+            first_component = relative.split("/")[0]
+            children.add(first_component)
+    
+    # If no results in Azure, fallback to local
+    if not children:
+        local_path = get_local_path(path)
+        if local_path.exists() and local_path.is_dir():
+            return [f.name for f in local_path.iterdir()]
+    
+    return sorted(children)
 
 
 def glob_files(directory: Path, pattern: str) -> List[str]:
-    """List files matching pattern in directory."""
+    """List files matching pattern in directory. Fallback to local if not in Azure."""
     if not USE_AZURE:
         return [f.name for f in directory.glob(pattern)]
     
@@ -135,11 +219,17 @@ def glob_files(directory: Path, pattern: str) -> List[str]:
         if "/" not in relative and relative.lower().endswith(ext):
             results.append(relative)
     
+    # If no results in Azure, fallback to local
+    if not results:
+        local_path = get_local_path(directory)
+        if local_path.exists() and local_path.is_dir():
+            return [f.name for f in local_path.glob(pattern)]
+    
     return results
 
 
 def read_excel(path: Path, **kwargs):
-    """Read Excel file and return pandas DataFrame."""
+    """Read Excel file and return pandas DataFrame. Fallback to local if not in Azure."""
     import pandas as pd
     
     if not USE_AZURE:
@@ -151,20 +241,27 @@ def read_excel(path: Path, **kwargs):
     if blob_path.startswith("Use Cases/"):
         blob_path = blob_path[10:]  # Remove "Use Cases/"
     
-    print(f"[DEBUG] Reading Excel from: {blob_path}")
-    blob_client = container_client.get_blob_client(blob_path)
-    stream = io.BytesIO()
-    blob_client.download_blob().readinto(stream)
-    stream.seek(0)
-    return pd.read_excel(stream, **kwargs)
+    # Try Azure first
+    if _check_blob_exists(blob_path):
+        print(f"[DEBUG] Reading Excel from Azure: {blob_path}")
+        blob_client = container_client.get_blob_client(blob_path)
+        stream = io.BytesIO()
+        blob_client.download_blob().readinto(stream)
+        stream.seek(0)
+        return pd.read_excel(stream, **kwargs)
+    
+    # Fallback to local
+    local_path = get_local_path(path)
+    print(f"[DEBUG] Reading Excel from local: {local_path}")
+    return pd.read_excel(local_path, **kwargs)
 
 
-def read_excel_custom(path: Path):
-    """Read Excel file without column restrictions."""
+def read_excel_custom(path: Path, **kwargs):
+    """Read Excel file without column restrictions. Fallback to local if not in Azure."""
     import pandas as pd
     
     if not USE_AZURE:
-        return pd.read_excel(path)
+        return pd.read_excel(path, **kwargs)
     
     # For Azure, download to memory and read
     blob_path = normalize_path(str(path).replace(str(get_base_dir()), ""))
@@ -172,16 +269,23 @@ def read_excel_custom(path: Path):
     if blob_path.startswith("Use Cases/"):
         blob_path = blob_path[10:]  # Remove "Use Cases/"
     
-    print(f"[DEBUG] Reading Excel (custom) from: {blob_path}")
-    blob_client = container_client.get_blob_client(blob_path)
-    stream = io.BytesIO()
-    blob_client.download_blob().readinto(stream)
-    stream.seek(0)
-    return pd.read_excel(stream)
+    # Try Azure first
+    if _check_blob_exists(blob_path):
+        print(f"[DEBUG] Reading Excel (custom) from Azure: {blob_path}")
+        blob_client = container_client.get_blob_client(blob_path)
+        stream = io.BytesIO()
+        blob_client.download_blob().readinto(stream)
+        stream.seek(0)
+        return pd.read_excel(stream, **kwargs)
+    
+    # Fallback to local
+    local_path = get_local_path(path)
+    print(f"[DEBUG] Reading Excel (custom) from local: {local_path}")
+    return pd.read_excel(local_path, **kwargs)
 
 
 def read_json(path: Path):
-    """Read JSON file and return parsed data."""
+    """Read JSON file and return parsed data. Fallback to local if not in Azure."""
     import json
     
     if not USE_AZURE:
@@ -194,15 +298,22 @@ def read_json(path: Path):
     if blob_path.startswith("Use Cases/"):
         blob_path = blob_path[10:]  # Remove "Use Cases/"
     
-    print(f"[DEBUG] Reading JSON from: {blob_path}")
-    blob_client = container_client.get_blob_client(blob_path)
-    content = blob_client.download_blob().readall()
-    # Use utf-8-sig to handle BOM (Byte Order Mark)
-    return json.loads(content.decode("utf-8-sig"))
+    # Try Azure first
+    if _check_blob_exists(blob_path):
+        print(f"[DEBUG] Reading JSON from Azure: {blob_path}")
+        blob_client = container_client.get_blob_client(blob_path)
+        content = blob_client.download_blob().readall()
+        return json.loads(content.decode("utf-8-sig"))
+    
+    # Fallback to local
+    local_path = get_local_path(path)
+    print(f"[DEBUG] Reading JSON from local: {local_path}")
+    with open(local_path, "r", encoding="utf-8-sig") as f:
+        return json.load(f)
 
 
 def get_file_stream(path: Path):
-    """Get file as BytesIO stream for send_file. Uses cache to avoid repeated downloads."""
+    """Get file as BytesIO stream for send_file. Uses cache to avoid repeated downloads. Fallback to local if not in Azure."""
     if not USE_AZURE:
         return None  # Signal to use file path instead
     
@@ -212,15 +323,20 @@ def get_file_stream(path: Path):
     if blob_path.startswith("Use Cases/"):
         blob_path = blob_path[10:]  # Remove "Use Cases/"
     
-    # Get cached bytes (or download if not cached)
-    file_bytes = _get_cached_file_bytes(blob_path)
-    print(f"[FILE CACHE] Serving from cache: {blob_path} ({len(file_bytes)} bytes)")
+    # Try Azure first
+    if _check_blob_exists(blob_path):
+        # Get cached bytes (or download if not cached)
+        file_bytes = _get_cached_file_bytes(blob_path)
+        print(f"[FILE CACHE] Serving from Azure cache: {blob_path} ({len(file_bytes)} bytes)")
+        
+        # Create fresh BytesIO stream from cached bytes
+        stream = io.BytesIO(file_bytes)
+        stream.seek(0)
+        return stream
     
-    # Create fresh BytesIO stream from cached bytes
-    stream = io.BytesIO(file_bytes)
-    stream.seek(0)
-    
-    return stream
+    # Fallback to local (return None to signal local file path should be used)
+    print(f"[FALLBACK] File not in Azure, using local: {path}")
+    return None
 
 
 def get_file_path(path: Path) -> str:

@@ -794,6 +794,107 @@ header h1 {
 .modal .json-view {
     font-size: 0.95rem;
 }
+
+/* ==================== COMPANY INFO TABLE ==================== */
+.company-info-table {
+    overflow-x: auto;
+}
+
+#companyInfoTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+#companyInfoTable tbody tr {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+#companyInfoTable tbody tr:last-child {
+    border-bottom: none;
+}
+
+#companyInfoTable td {
+    padding: 0.75rem 0.5rem;
+    vertical-align: top;
+}
+
+#companyInfoTable .info-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    width: 45%;
+}
+
+#companyInfoTable .info-value {
+    color: var(--text-primary);
+    width: 55%;
+}
+
+.financial-report-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    transition: color 0.2s;
+}
+
+.financial-report-link:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* ==================== INVOICE DATA TABLE ==================== */
+.invoice-data-table {
+    overflow-x: auto;
+}
+
+#invoiceDataTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+#invoiceDataTable tbody tr {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+#invoiceDataTable tbody tr:last-child {
+    border-bottom: none;
+}
+
+#invoiceDataTable td {
+    padding: 0.75rem 0.5rem;
+    vertical-align: top;
+}
+
+#invoiceDataTable .info-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    width: 45%;
+}
+
+#invoiceDataTable .info-value {
+    color: var(--text-primary);
+    width: 55%;
+}
+
+.invoice-url-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    transition: color 0.2s;
+}
+
+.invoice-url-link:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
 /* ==================== MODAL ==================== */
 .modal {
     position: fixed;
@@ -976,6 +1077,22 @@ header h1 {
 [data-theme="dark"] .error-state {
     border-color: rgba(255, 255, 255, 0.06);
     background: rgba(34, 38, 46, 0.85);
+}
+
+[data-theme="dark"] #companyInfoTable tbody tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] #invoiceDataTable tbody tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .invoice-url-link {
+    color: #60a5fa;
+}
+
+[data-theme="dark"] .invoice-url-link:hover {
+    color: #93c5fd;
 }
 
 /* ==================== SCROLLBAR ==================== */

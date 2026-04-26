@@ -60,6 +60,16 @@ const rightPanelTitle = document.getElementById('rightPanelTitle');
 const itemsSection = document.getElementById('itemsSection');
 const metadataSection = document.getElementById('metadataSection');
 const metadataJson = document.getElementById('metadataJson');
+const companyInfoSection = document.getElementById('companyInfoSection');
+const companyName = document.getElementById('companyName');
+const reportingPeriod = document.getElementById('reportingPeriod');
+const abuDhabiCompanyName = document.getElementById('abuDhabiCompanyName');
+const spaEffectiveDate = document.getElementById('spaEffectiveDate');
+const termStartDate = document.getElementById('termStartDate');
+const financialReportLink = document.getElementById('financialReportLink');
+const invoiceDataSection = document.getElementById('invoiceDataSection');
+const invoiceDataTable = document.getElementById('invoiceDataTable');
+const invoiceDataBody = document.getElementById('invoiceDataBody');
 // Custom project dropdown elements
 const projectSelectWrapper = document.getElementById('projectSelectWrapper');
 const projectSelectToggle = document.getElementById('projectSelectToggle');
@@ -339,6 +349,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             sPlaceholder.disabled = true;
             sPlaceholder.selected = true;
             sampleSelect.appendChild(sPlaceholder);
+            // Ensure empty state is visible on initial page load
+            emptyState.style.display = '';
+            contentArea.classList.add('hidden');
+            errorState.classList.add('hidden');
         } else {
             // Prompt Enhancer mode: hide controls and load documents list
             if (projectKey === 'promptenhancer') {
@@ -631,16 +645,20 @@ async function handleSearch() {
     // Toggle right panel sections based on the active project AFTER data is loaded
     const isSmartActive = projectKey === 'smartjudge';
     const isPrompt = projectKey === 'promptenhancer';
+    const isAdio = projectKey === 'adio';
+    const isEmiratesNbd = projectKey === 'emiratesnbd';
     if (rightPanelTitle) rightPanelTitle.textContent = 'Sample Details';
-    if (itemsSection) itemsSection.style.display = (isSmartActive || isPrompt) ? 'none' : '';
+    if (itemsSection) itemsSection.style.display = (isSmartActive || isPrompt || isAdio || isEmiratesNbd) ? 'none' : '';
     if (metadataSection) metadataSection.style.display = isSmartActive ? '' : 'none';
+    if (companyInfoSection) companyInfoSection.style.display = isAdio ? '' : 'none';
+    if (invoiceDataSection) invoiceDataSection.style.display = isEmiratesNbd ? '' : 'none';
     const warningsSection = document.getElementById('warningsSection');
-    // Hide final output section for both Smart Judge and Prompt Enhancer
-    if (warningsSection) warningsSection.style.display = (isPrompt || isSmartActive) ? 'none' : '';
+    // Hide final output section for Smart Judge, Prompt Enhancer, ADIO, and Emirates NBD
+    if (warningsSection) warningsSection.style.display = (isPrompt || isSmartActive || isAdio || isEmiratesNbd) ? 'none' : '';
 
-        // Load Final outputs for this Sample ID and populate sections (skip for Prompt Enhancer)
+        // Load Final outputs for this Sample ID and populate sections (skip for Prompt Enhancer, ADIO, and Emirates NBD)
         try {
-            if (isPrompt) {
+            if (isPrompt || isAdio || isEmiratesNbd) {
                 const warningsPre = document.getElementById('warningsJson');
                 if (warningsPre) warningsPre.textContent = '';
             } else {
@@ -689,6 +707,152 @@ async function handleSearch() {
             }
         }
 
+        // Load Company Information for ADIO
+        if (isAdio) {
+            try {
+                const companyInfoResp = await fetch(`/api/companyInfo/${encodeURIComponent(currentData.sample_id)}?project=${encodeURIComponent(projectKey)}`);
+                const companyInfoData = await companyInfoResp.json();
+                if (companyInfoResp.ok && companyInfoData.data) {
+                    const info = companyInfoData.data;
+                    if (companyName) companyName.textContent = info.company_name || '-';
+                    if (reportingPeriod) reportingPeriod.textContent = info.reporting_period || '-';
+                    if (abuDhabiCompanyName) abuDhabiCompanyName.textContent = info.abu_dhabi_company_name || '-';
+                    if (spaEffectiveDate) spaEffectiveDate.textContent = info.spa_effective_date || '-';
+                    if (termStartDate) termStartDate.textContent = info.term_start_date || '-';
+                    
+                    // Set financial report link
+                    if (financialReportLink && info.financial_report_url) {
+                        financialReportLink.href = info.financial_report_url;
+                        financialReportLink.style.display = '';
+                    } else if (financialReportLink) {
+                        financialReportLink.style.display = 'none';
+                    }
+                } else {
+                    // Set default values if no data
+                    if (companyName) companyName.textContent = '-';
+                    if (reportingPeriod) reportingPeriod.textContent = '-';
+                    if (abuDhabiCompanyName) abuDhabiCompanyName.textContent = '-';
+                    if (spaEffectiveDate) spaEffectiveDate.textContent = '-';
+                    if (termStartDate) termStartDate.textContent = '-';
+                    if (financialReportLink) financialReportLink.style.display = 'none';
+                }
+            } catch (e) {
+                console.error('Failed to load company info:', e);
+            }
+        }
+
+        // Load Invoice Data for Emirates NBD
+        if (isEmiratesNbd) {
+            try {
+                const invoiceDataResp = await fetch(`/api/invoiceData/${encodeURIComponent(currentData.sample_id)}?project=${encodeURIComponent(projectKey)}`);
+                const invoiceDataData = await invoiceDataResp.json();
+                console.log('Invoice data response:', invoiceDataData);
+                
+                if (invoiceDataResp.ok && invoiceDataData.data && invoiceDataData.columns) {
+                    const data = invoiceDataData.data;
+                    const columns = invoiceDataData.columns;
+                    console.log('Processing invoice data with columns:', columns);
+                    
+                    // Clear existing table content
+                    if (invoiceDataBody) invoiceDataBody.innerHTML = '';
+                    
+                    // Build table body with key-value pairs in column order
+                    if (data && typeof data === 'object' && invoiceDataBody) {
+                        // Iterate through columns in the order they appear in Excel
+                        columns.forEach(key => {
+                            const tr = document.createElement('tr');
+                            
+                            // Create label cell
+                            const labelTd = document.createElement('td');
+                            labelTd.className = 'info-label';
+                            // Use the column name as-is from Excel
+                            labelTd.textContent = key + ':';
+                            
+                            // Create value cell
+                            const valueTd = document.createElement('td');
+                            valueTd.className = 'info-value';
+                            const value = data[key];
+                            
+                            // Check if the value is a URL or if the column name suggests it's a URL
+                            const valueStr = value ? String(value).trim() : '';
+                            const isUrlColumn = key.toLowerCase().includes('url') || 
+                                               key.toLowerCase().includes('link') || 
+                                               key.toLowerCase().includes('spreadsheet');
+                            const looksLikeUrl = valueStr.startsWith('http://') || 
+                                                valueStr.startsWith('https://') || 
+                                                valueStr.startsWith('www.');
+                            
+                            if ((isUrlColumn || looksLikeUrl) && valueStr && valueStr !== '-') {
+                                // Create a hyperlink
+                                const link = document.createElement('a');
+                                // Ensure URL has protocol
+                                let url = valueStr;
+                                if (valueStr.startsWith('www.')) {
+                                    url = 'https://' + valueStr;
+                                }
+                                link.href = url;
+                                link.textContent = 'Open Link';
+                                link.target = '_blank';
+                                link.className = 'invoice-url-link';
+                                valueTd.appendChild(link);
+                            } else {
+                                // Regular text value
+                                valueTd.textContent = value !== null && value !== undefined ? String(value) : '-';
+                            }
+                            
+                            tr.appendChild(labelTd);
+                            tr.appendChild(valueTd);
+                            invoiceDataBody.appendChild(tr);
+                        });
+                        console.log('Invoice data populated successfully');
+                    } else {
+                        // No data available
+                        const tr = document.createElement('tr');
+                        const td = document.createElement('td');
+                        td.textContent = 'No invoice data available';
+                        td.colSpan = 2;
+                        td.style.textAlign = 'center';
+                        td.style.padding = '1rem';
+                        td.style.color = 'var(--text-secondary)';
+                        tr.appendChild(td);
+                        invoiceDataBody.appendChild(tr);
+                    }
+                } else {
+                    console.error('Failed to load invoice data - response ok:', invoiceDataResp.ok);
+                    console.error('Error details:', invoiceDataData.error || invoiceDataData);
+                    // Clear table and show error
+                    if (invoiceDataBody) {
+                        invoiceDataBody.innerHTML = '';
+                        const tr = document.createElement('tr');
+                        const td = document.createElement('td');
+                        td.textContent = invoiceDataData.error || 'Failed to load invoice data';
+                        td.colSpan = 2;
+                        td.style.textAlign = 'center';
+                        td.style.padding = '1rem';
+                        td.style.color = 'var(--text-secondary)';
+                        tr.appendChild(td);
+                        invoiceDataBody.appendChild(tr);
+                    }
+                }
+            } catch (ide) {
+                console.error('Exception loading invoice data:', ide);
+                console.error('Stack trace:', ide.stack);
+                // Clear table and show error
+                if (invoiceDataBody) {
+                    invoiceDataBody.innerHTML = '';
+                    const tr = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.textContent = 'Error loading invoice data: ' + ide.message;
+                    td.colSpan = 2;
+                    td.style.textAlign = 'center';
+                    td.style.padding = '1rem';
+                    td.style.color = 'var(--text-secondary)';
+                    tr.appendChild(td);
+                    invoiceDataBody.appendChild(tr);
+                }
+            }
+        }
+
     } catch (error) {
         console.error('Error in handleSearch:', error);
         showError('An error occurred while fetching data');
@@ -725,10 +889,10 @@ function displayData() {
 
     // Display short texts
     const projectKey = projectSelect ? (projectSelect.value || '') : '';
-    if (projectKey !== 'smartjudge' && projectKey !== 'promptenhancer') {
+    if (projectKey !== 'smartjudge' && projectKey !== 'promptenhancer' && projectKey !== 'adio' && projectKey !== 'emiratesnbd') {
         displayShortTexts();
     } else {
-        // Clear items list and counter for Smart Judge
+        // Clear items list and counter for Smart Judge, Prompt Enhancer, ADIO, and Emirates NBD
         shortTextList.innerHTML = '';
         itemCounter.textContent = '';
             if (itemCounter) itemCounter.style.display = 'none';

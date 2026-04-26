@@ -41,10 +41,16 @@ Key folders and files expected by the app:
 	- `final_outputs.json` (optional)
 - `Use Cases/Smart Judge/`
 	- `data/<sample_id>/*.pdf`
-	- `data/<sample_id>/metadata.json`
+	- `metadata.json` (required for metadata lookup)
 	- `final_outputs.json` (required for listing sample IDs)
 - `Use Cases/Prompt Enhancer/`
 	- `data/`
+- `Use Cases/ADIO/`
+	- `data/<sample_id>/*.pdf` (PDFs in subfolders)
+	- `company_info.xlsx` (required for company information)
+- `Use Cases/Emirates NBD/`
+	- `data/<sample_id>/*.pdf`
+	- `invoice_data.xlsx` (required for invoice data)
 
 By default, `Use Cases` is resolved relative to `app.py`. You can override it with an environment variable.
 
@@ -82,11 +88,15 @@ All endpoints accept the optional `project` query param to select context.
 	- Audit: returns short texts from `Metadata.xlsx` and PDFs from `data/<sample_id>/`.
 	- Invoicing: treats `sample_id` as a PDF filename in `data/`; returns the single file.
 	- Smart Judge: returns PDFs under `data/<sample_id>/` and empty `short_texts`.
+	- ADIO: returns PDFs under `data/<sample_id>/` and empty `short_texts`.
+	- Emirates NBD: returns PDFs under `data/<sample_id>/` and empty `short_texts`.
 
 - `GET /api/sample_ids`
 	- Audit: distinct `Purch.Req.` values from `Metadata.xlsx`.
 	- Invoicing: unique PDF filenames (case-insensitive) under `data/`.
 	- Smart Judge: `sample_id` values parsed from `final_outputs.json`.
+	- ADIO: folder names in `data/` directory.
+	- Emirates NBD: folder names in `data/` directory.
 
 - `GET /api/pdf/<sample_id>/<filename>`
 	- Serves a PDF file.
@@ -97,7 +107,13 @@ All endpoints accept the optional `project` query param to select context.
 	- Returns `detailed_analysis` and `warnings` for the given sample from `final_outputs.json` in the selected project.
 
 - `GET /api/metadata/<sample_id>`
-	- Smart Judge only: returns `metadata.json` from `data/<sample_id>/`.
+	- Smart Judge only: returns metadata for the sample from centralized `metadata.json`.
+
+- `GET /api/companyInfo/<sample_id>`
+	- ADIO only: returns company information for the sample from `company_info.xlsx`.
+
+- `GET /api/invoiceData/<sample_id>`
+	- Emirates NBD only: returns invoice data for the sample from `invoice_data.xlsx`.
 
 - `GET /api/projects`
 	- Lists available projects and whether required files are configured/present.
@@ -110,13 +126,19 @@ All endpoints accept the optional `project` query param to select context.
 - Invoicing:
 	- Requires: `Use Cases/Invoicing/data/`.
 - Smart Judge:
-	- Requires: `Use Cases/Smart Judge/data/` and `Use Cases/Smart Judge/final_outputs.json`.
+	- Requires: `Use Cases/Smart Judge/data/`, `Use Cases/Smart Judge/final_outputs.json`, and `Use Cases/Smart Judge/metadata.json`.
+- ADIO:
+	- Requires: `Use Cases/ADIO/data/` and `Use Cases/ADIO/company_info.xlsx`.
+- Emirates NBD:
+	- Requires: `Use Cases/Emirates NBD/data/` and `Use Cases/Emirates NBD/invoice_data.xlsx`.
 
 ## Common issues
 
 - 404 for PDFs: verify the file casing and location. The app handles `.pdf` and `.PDF` and deduplicates case-insensitively, but paths must exist.
 - Excel errors: ensure `Metadata.xlsx` has a `Purch.Req.` column and the expected sheet.
 - JSON parse errors: check `final_outputs.json` and `metadata.json` for valid JSON; the app reads Final Outputs JSON with `utf-8-sig` to tolerate BOM.
+- ADIO Excel format: `company_info.xlsx` must have a `sample_id` column (or variations like 'Sample ID') and should include columns for company information (e.g., `company_name`, `reporting_period`, `abu_dhabi_company_name`, `spa_effective_date`, `term_start_date`, `financial_report_url`).
+- Smart Judge metadata format: `metadata.json` should be either an array of objects with `sample_id` fields, or an object with sample IDs as keys. Each entry contains metadata for one sample.
 
 ## Development notes
 

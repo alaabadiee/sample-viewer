@@ -59,6 +59,8 @@
                         <option value="invoicing">Invoicing</option>
                         <option value="smartjudge">Smart Judge</option>
                         <option value="promptenhancer">Prompt Enhancer</option>
+                        <option value="adio">ADIO</option>
+                        <option value="emiratesnbd">Emirates NBD</option>
                     </select>
                 </div>
                 <div class="custom-select" id="sampleSelectWrapper">
@@ -71,6 +73,19 @@
                     </select>
                 </div>
             </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="1.5">
+                <path
+                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                </path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+            <p>Select a use case and sample ID to begin.</p>
         </div>
 
         <!-- Content Section -->
@@ -198,6 +213,70 @@
                         <div class="collapsible-content">
                             <pre class="json-view" id="warningsJson"></pre>
                         </div>
+                    </div>
+
+                    <!-- Company Information Section (ADIO only) -->
+                    <div class="collapsible-section" id="companyInfoSection" style="display:none;">
+                        <div class="collapsible-header" role="button" tabindex="0">
+                            <span>Company Information</span>
+                            <div class="header-actions">
+                                <span class="chevron">▼</span>
+                            </div>
+                        </div>
+                        <div class="collapsible-content">
+                            <div class="company-info-table">
+                                <table id="companyInfoTable">
+                                    <tbody>
+                                        <tr>
+                                            <td class="info-label">Name of the Company:</td>
+                                            <td class="info-value" id="companyName">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Reporting Performance Period:</td>
+                                            <td class="info-value" id="reportingPeriod">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Abu Dhabi Company Name:</td>
+                                            <td class="info-value" id="abuDhabiCompanyName">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">SPA Effective Date:</td>
+                                            <td class="info-value" id="spaEffectiveDate">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Term Start Date:</td>
+                                            <td class="info-value" id="termStartDate">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="info-label">Financial Report:</td>
+                                            <td class="info-value">
+                                                <a id="financialReportLink" href="#" target="_blank" class="financial-report-link">View Financial Report</a>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Invoice Data Section (Emirates NBD only) -->
+                    <div class="collapsible-section" id="invoiceDataSection" style="display:none;">
+                        <div class="collapsible-header" role="button" tabindex="0">
+                            <span>Invoice Data</span>
+                            <div class="header-actions">
+                                <span class="chevron">▼</span>
+                            </div>
+                        </div>
+                        <div class="collapsible-content">
+                            <div class="invoice-data-table">
+                                <table id="invoiceDataTable">
+                                    <tbody id="invoiceDataBody">
+                                        <!-- Invoice data rows will be dynamically populated -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
 
                                                 <!-- Modal for expanded content -->
                                                 <div id="fullViewModal" class="modal" aria-hidden="true" role="dialog" aria-label="Full view">
@@ -217,19 +296,6 @@
                                         </div>
                 </div>
             </div>
-        </div>
-
-        <!-- Empty State -->
-        <div id="emptyState" class="empty-state">
-            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="1.5">
-                <path
-                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
-                </path>
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                <line x1="12" y1="22.08" x2="12" y2="12"></line>
-            </svg>
-            <p>Select a use case and sample ID to begin.</p>
         </div>
 
         <!-- Error State -->
