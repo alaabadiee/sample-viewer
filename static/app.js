@@ -21,6 +21,7 @@ let baseScale = 1.0;
 // Force fit mode to 'width' by default (override any previous 'page' setting)
 localStorage.setItem('fitMode', 'width');
 let fitMode = 'width';
+let previousProjectKey = '';
 let pdfDoc = null;
 let pageRendering = false;
 let currentPageNumber = 1;
@@ -515,6 +516,8 @@ document.addEventListener('click', (e) => {
 if (projectSelect) {
     projectSelect.addEventListener('change', async () => {
     const projectKey = projectSelect.value;
+    const wasPromptEnhancer = previousProjectKey === 'promptenhancer';
+    previousProjectKey = projectKey;
     // Clear any previously stored selection; require explicit choice each time
     // localStorage.setItem('selectedProject', projectKey);
         // Clear sample select
@@ -563,22 +566,17 @@ if (projectSelect) {
                 return;
             }
 
-            // For non-Prompt Enhancer projects: restore UI elements
+            // For non-Prompt Enhancer projects: ensure sample selector is visible
             if (sampleSelectWrapper) sampleSelectWrapper.style.display = '';
-            const itemsSection = document.getElementById('itemsSection');
-            const metadataSection = document.getElementById('metadataSection');
-            const warningsSection = document.getElementById('warningsSection');
-            const dataSection = document.querySelector('.data-section');
-            if (pdfCounter) pdfCounter.style.display = '';
-            if (pdfIndicator) pdfIndicator.style.display = '';
-            if (itemsSection) itemsSection.style.display = '';
-            if (metadataSection) metadataSection.style.display = 'none'; // Smart Judge specific
-            if (warningsSection) warningsSection.style.display = '';
-            if (dataSection) dataSection.style.display = '';
-            // Clear content area until sample is selected
-            contentArea.classList.add('hidden');
-            emptyState.style.display = '';
-            errorState.classList.add('hidden');
+            
+            // If switching FROM prompt enhancer, hide content until a sample is selected
+            if (wasPromptEnhancer) {
+                contentArea.classList.add('hidden');
+                emptyState.style.display = '';
+                errorState.classList.add('hidden');
+            }
+            // Don't modify any sections when switching between normal use cases
+            // Sections will be shown/hidden by handleSearch() when a sample is selected
 
             const resp = await fetch(`/api/sample_ids?project=${encodeURIComponent(projectKey)}`);
             const data = await resp.json();
@@ -598,6 +596,11 @@ if (projectSelect) {
                     // Manually trigger MutationObserver alternative by rebuilding
                     const event = new Event('optionsUpdated');
                     sampleSelect.dispatchEvent(event);
+                }
+                // Automatically open the sample dropdown after loading samples
+                if (sampleSelectWrapper && sampleSelectToggle) {
+                    sampleSelectWrapper.classList.add('open');
+                    sampleSelectToggle.setAttribute('aria-expanded', 'true');
                 }
             } else {
                 showError(data.error || 'Failed to load Sample IDs');
@@ -647,6 +650,11 @@ async function handleSearch() {
     const isPrompt = projectKey === 'promptenhancer';
     const isAdio = projectKey === 'adio';
     const isEmiratesNbd = projectKey === 'emiratesnbd';
+    
+    // Ensure data section is visible
+    const dataSection = document.querySelector('.data-section');
+    if (dataSection) dataSection.style.display = '';
+    
     if (rightPanelTitle) rightPanelTitle.textContent = 'Sample Details';
     if (itemsSection) itemsSection.style.display = (isSmartActive || isPrompt || isAdio || isEmiratesNbd) ? 'none' : '';
     if (metadataSection) metadataSection.style.display = isSmartActive ? '' : 'none';
@@ -967,7 +975,17 @@ function showNoPdfs() {
 }
 
 function setSearchLoading(isLoading) {
-    // No visible loading spinner now; could hook into UI if needed
+    const loadingState = document.getElementById('loadingState');
+    if (isLoading) {
+        // Hide all other states and show loading
+        emptyState.style.display = 'none';
+        errorState.classList.add('hidden');
+        contentArea.classList.add('hidden');
+        if (loadingState) loadingState.classList.remove('hidden');
+    } else {
+        // Hide loading state
+        if (loadingState) loadingState.classList.add('hidden');
+    }
 }
 
 // ==================== PDF RENDERING ====================
