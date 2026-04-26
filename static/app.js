@@ -644,6 +644,9 @@ async function handleSearch() {
         // Hide main loading state before displaying content to avoid showing both loading states
         setSearchLoading(false);
         
+        // Add a small delay to ensure loading state is visually hidden before showing content
+        await new Promise(resolve => setTimeout(resolve, 400));
+        
         displayData();
 
     // Toggle right panel sections based on the active project AFTER data is loaded
