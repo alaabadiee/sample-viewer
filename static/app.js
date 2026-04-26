@@ -645,7 +645,7 @@ async function handleSearch() {
         setSearchLoading(false);
         
         // Add a small delay to ensure loading state is visually hidden before showing content
-        await new Promise(resolve => setTimeout(resolve, 400));
+        await new Promise(resolve => setTimeout(resolve, 350));
         
         displayData();
 
