@@ -44,6 +44,7 @@ const errorMessage = document.getElementById('errorMessage');
 const shortTextList = document.getElementById('shortTextList');
 const pdfContainer = document.getElementById('pdfContainer');
 const pdfCanvas = document.getElementById('pdfCanvas');
+const pdfLoadingOverlay = document.getElementById('pdfLoadingOverlay');
 const pdfIndicator = document.getElementById('pdfIndicator');
 const pdfCounter = document.getElementById('pdfCounter');
 const itemCounter = document.getElementById('itemCounter');
@@ -597,11 +598,6 @@ if (projectSelect) {
                     const event = new Event('optionsUpdated');
                     sampleSelect.dispatchEvent(event);
                 }
-                // Automatically open the sample dropdown after loading samples
-                if (sampleSelectWrapper && sampleSelectToggle) {
-                    sampleSelectWrapper.classList.add('open');
-                    sampleSelectToggle.setAttribute('aria-expanded', 'true');
-                }
             } else {
                 showError(data.error || 'Failed to load Sample IDs');
             }
@@ -1000,6 +996,9 @@ async function loadPdf(index) {
         : `/api/pdf/${encodeURIComponent(currentData.sample_id)}/${encodeURIComponent(fileName)}?project=${encodeURIComponent(projectKey)}`;
     ensurePdfCanvas();
 
+    // Show loading overlay
+    showPdfLoading();
+
     if (isPrompt) {
         // Render image instead of PDF
         return loadImage(index);
@@ -1009,6 +1008,8 @@ async function loadPdf(index) {
     if (typeof pdfjsLib === 'undefined') {
         console.error('PDF.js not loaded');
         pdfIndicator.textContent = 'PDF viewer unavailable';
+        // Hide loading overlay
+        hidePdfLoading();
         // Show a link to download instead
         pdfContainer.innerHTML = `<div style="text-align: center; padding: 2rem;">
             <p style="margin-bottom: 1rem;">PDF viewer unavailable</p>
@@ -1045,9 +1046,14 @@ async function loadPdf(index) {
     renderAllPages();
         updatePdfControls();
         updateZoomDisplay();
+        
+        // Hide loading overlay after rendering completes
+        hidePdfLoading();
     } catch (error) {
         console.error('Error loading PDF:', error);
         pdfIndicator.textContent = 'Error loading PDF';
+        // Hide loading overlay on error
+        hidePdfLoading();
     }
 }
 
@@ -1266,6 +1272,28 @@ function ensurePdfCanvas() {
     if (!pdfCanvas.parentElement) {
         pdfContainer.innerHTML = '';
         pdfContainer.appendChild(pdfCanvas);
+        // Re-add the loading overlay after clearing
+        if (pdfLoadingOverlay && !pdfLoadingOverlay.parentElement) {
+            pdfContainer.appendChild(pdfLoadingOverlay);
+        }
+    }
+}
+
+// Helper to show PDF loading state
+function showPdfLoading() {
+    // Ensure loading overlay is in the DOM
+    if (pdfLoadingOverlay && !pdfLoadingOverlay.parentElement) {
+        pdfContainer.appendChild(pdfLoadingOverlay);
+    }
+    if (pdfLoadingOverlay) {
+        pdfLoadingOverlay.classList.remove('hidden');
+    }
+}
+
+// Helper to hide PDF loading state
+function hidePdfLoading() {
+    if (pdfLoadingOverlay) {
+        pdfLoadingOverlay.classList.add('hidden');
     }
 }
 
@@ -1279,11 +1307,21 @@ function updatePageControls() {
 // ================ IMAGE RENDERING (Prompt Enhancer) ================
 function loadImage(index) {
     if (!currentData || !currentData.pdfs[index]) return;
+    
     const projectKey = projectSelect ? (projectSelect.value || 'promptenhancer') : 'promptenhancer';
     const fileName = currentData.pdfs[index];
     const imgUrl = `/api/pdf/${encodeURIComponent(fileName)}/${encodeURIComponent(fileName)}?project=${encodeURIComponent(projectKey)}`;
-    // Replace container with an image element
+    
+    // Clear container and show loading
     pdfContainer.innerHTML = '';
+    
+    // Create and show loading overlay
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'pdf-loading-overlay';
+    loadingDiv.innerHTML = '<div class="pdf-spinner"></div><p>Loading document...</p>';
+    pdfContainer.appendChild(loadingDiv);
+    
+    // Create image element
     const img = document.createElement('img');
     img.src = imgUrl;
     img.alt = fileName;
@@ -1294,6 +1332,21 @@ function loadImage(index) {
     img.style.margin = '0 auto';
     img.style.transformOrigin = 'center center';
     img.style.transition = 'transform 0.2s ease';
+    
+    // Hide loading overlay when image loads
+    img.onload = () => {
+        if (loadingDiv && loadingDiv.parentElement) {
+            loadingDiv.remove();
+        }
+    };
+    
+    // Hide loading overlay on error too
+    img.onerror = () => {
+        if (loadingDiv && loadingDiv.parentElement) {
+            loadingDiv.remove();
+        }
+    };
+    
     pdfContainer.appendChild(img);
     // Reset scale for new image
     currentScale = 1.0;

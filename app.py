@@ -31,7 +31,6 @@ INVOICING_FINAL_OUTPUTS = INVOICING_DIR / "final_outputs.json"
 # Default configuration (Smart Judge project)
 SMART_JUDGE_DIR = USE_CASES_DIR / "Smart Judge"
 SMART_JUDGE_DATA_DIR = SMART_JUDGE_DIR / "data"
-SMART_JUDGE_FINAL_OUTPUTS = SMART_JUDGE_DIR / "final_outputs.json"
 SMART_JUDGE_METADATA_FILE = SMART_JUDGE_DIR / "metadata.json"
 
 # Default configuration (Prompt Enhancer project)
@@ -66,7 +65,7 @@ PROJECTS = {
         "label": "Smart Judge",
         "data_dir": SMART_JUDGE_DATA_DIR,
         "excel_file": None,
-        "final_outputs": SMART_JUDGE_FINAL_OUTPUTS,
+        "final_outputs": None,
         "metadata_file": SMART_JUDGE_METADATA_FILE,
     },
     "promptenhancer": {
@@ -139,9 +138,7 @@ def _get_project_config(project_key: str):
         if not data_dir or not storage.exists(data_dir):
             missing.append("data_dir")
     elif project_key == "smartjudge":
-        # Final outputs and metadata file required for sample IDs; data_dir required for serving PDFs
-        if not final_outputs or not storage.exists(Path(final_outputs)):
-            missing.append("final_outputs")
+        # Data dir and metadata file required
         if not data_dir or not storage.exists(data_dir):
             missing.append("data_dir")
         metadata_file: Path | None = cfg.get("metadata_file")
@@ -404,25 +401,19 @@ def get_sample_ids():
                 ids_sorted.append(name)
             return jsonify({"ids": ids_sorted, "count": len(ids_sorted), "project": project_key})
 
-        # Smart Judge: from final_outputs.json
+        # Smart Judge: folder names in data_dir
         if project_key == "smartjudge":
-            final_outputs_path: Path | None = cfg.get("final_outputs")
-            if not final_outputs_path or not storage.exists(final_outputs_path):
-                return jsonify({"error": err or "Final outputs file not found"}), 400
-            try:
-                data = _get_cached_json(project_key, final_outputs_path)
-            except Exception as je:
-                return jsonify({"error": f"Failed to parse Final Outputs JSON: {je}"}), 500
-            ids: list[str] = []
-            if isinstance(data, list):
-                for entry in data:
-                    sid = entry.get('sample_id') if isinstance(entry, dict) else None
-                    if sid is None:
-                        continue
-                    sid_str = str(sid).strip()
-                    if sid_str:
-                        ids.append(sid_str)
-            ids_sorted = sorted(set(ids), key=lambda s: (len(s), s))
+            data_dir: Path = cfg.get("data_dir")
+            if not data_dir or not storage.exists(data_dir):
+                return jsonify({"error": err or "Data directory not found"}), 400
+            # Get all subdirectories in the data folder
+            from pathlib import Path
+            ids = []
+            for item in storage.list_dir(data_dir):
+                item_path = data_dir / item
+                if storage.is_dir(item_path):
+                    ids.append(item)
+            ids_sorted = sorted(ids, key=lambda s: (len(s), s))
             return jsonify({"ids": ids_sorted, "count": len(ids_sorted), "project": project_key})
 
         # Prompt Enhancer: PNG filenames in data_dir
@@ -551,8 +542,8 @@ def get_final_outputs(sample_id):
             return jsonify({"error": err}), 400
         print(f"[DEBUG] Final Outputs lookup for Sample ID: {sample_id} project={project_key}")
 
-        # Prompt Enhancer: no Final outputs
-        if project_key == 'promptenhancer':
+        # Prompt Enhancer and Smart Judge: no Final outputs
+        if project_key in ('promptenhancer', 'smartjudge'):
             return jsonify({
                 "sample_id": sample_id,
                 "warnings": [],

@@ -572,6 +572,41 @@ header h1 {
     margin: 0;
 }
 
+/* PDF Loading Overlay */
+.pdf-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-tertiary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: 8px;
+}
+
+.pdf-loading-overlay.hidden {
+    display: none;
+}
+
+.pdf-loading-overlay p {
+    margin-top: 1rem;
+    font-size: 1rem;
+    color: var(--text-secondary);
+}
+
+.pdf-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
 /* Ensure images fill the viewer area when rendering Prompt Enhancer */
 #pdfContainer img {
     display: block;
