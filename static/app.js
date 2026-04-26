@@ -634,11 +634,16 @@ async function handleSearch() {
 
         if (!response.ok) {
             showError(data.error || 'Sample ID not found');
+            setSearchLoading(false);
             return;
         }
 
         currentData = data;
         currentPdfIndex = 0;
+        
+        // Hide main loading state before displaying content to avoid showing both loading states
+        setSearchLoading(false);
+        
         displayData();
 
     // Toggle right panel sections based on the active project AFTER data is loaded
@@ -859,9 +864,11 @@ async function handleSearch() {
 
     } catch (error) {
         console.error('Error in handleSearch:', error);
+        setSearchLoading(false);
         showError('An error occurred while fetching data');
         console.error(error);
     } finally {
+        // Ensure loading state is always hidden (safe to call multiple times)
         setSearchLoading(false);
     }
 }
